@@ -351,7 +351,6 @@ texture_progress = SubResource("GradientTexture2D_jx6wh")
 script = ExtResource("6_85m8a")
 
 [node name="HeatDebug" type="Label" parent="HeatTracker" unique_id=1874187724]
-visible = false
 layout_mode = 0
 offset_left = 1700.0
 offset_top = -75.0

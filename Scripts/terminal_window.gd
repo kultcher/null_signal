@@ -104,7 +104,7 @@ func switch_session(new_sig: ActiveSignal, show_connection_banner: bool = false)
 	if new_sig == null:
 		print("null signal")
 		return
-	if active_signal == new_sig and not show_connection_banner:
+	if active_signal == new_sig:
 		_refresh_prefix()
 		_focus_command_line()
 		return

@@ -178,7 +178,7 @@ _______
 
 NEWEST:
 - Tether: Two linked signals, both have to be disabled within a window or they reboot
-- Leash: Linked signals, only one can be inactive at a time
+- Leash: Linked signals, only one can be inactive at a time - OR hacking a signal resets leashed signal to default state
 - Siphon: While connected to this signal, others get buffed
 - Chorus: IC only active if multiple connections
 - Parasite: IC migrates to other signals when killed

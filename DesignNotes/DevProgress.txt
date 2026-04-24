@@ -87,9 +87,11 @@ Development Progress
 - Added editor-level Escalation UI
 - Added Necromancer Escalation IC
 - Added IC effect visual layer, effects for Reboot, Haze, Bouncer and Faraday
-- Added callback
+- Added callback IC
 
 Short-term TODO:
+- Should KILL have a duration component? i.e. kill for X seconds, then signal comes back online?
+- OR BUFFER command that lets you delay a command
 - More and more advanced IC + escalation IC
 - procgen
 - Fuzz

@@ -44,6 +44,8 @@ func apply_params(params: Dictionary) -> void:
 func process_action(action_context: ActionContext) -> void:
 	if action_context == null or action_context.primary_target == null:
 		return
+	if action_context.source_type != ActionContext.SourceType.TERMINAL_COMMAND:
+		return
 	if action_context.action_type == ActionContext.ActionType.ACCESS_SIGNAL:
 		return
 	if action_context.action_type == ActionContext.ActionType.START_SCAN_SIGNAL:

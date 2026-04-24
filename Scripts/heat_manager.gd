@@ -4,7 +4,7 @@ extends Node
 
 @onready var timeline_manager = $"../SignalTimeline/TimelineManager"
 
-var current_heat: float = 1200.0
+var current_heat: float = 0.0
 var last_source: String = ""
 var null_spike_count: float = 0.0
 
