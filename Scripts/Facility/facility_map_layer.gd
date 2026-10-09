@@ -17,6 +17,11 @@ const PROP_EDGE_COLOR := Color(0.169, 0.733, 0.588, 0.35)
 const LABEL_COLOR := Color(0.169, 0.733, 0.588, 0.6)
 const PROP_LABEL_COLOR := Color(0.169, 0.733, 0.588, 0.35)
 const FEED_LABEL_COLOR := Color(0.0, 0.85, 1.0, 0.55)
+const MODEL_EDGE_COLOR := Color(0.35, 0.9, 0.8, 0.35)
+const MODEL_TOP_COLOR := Color(0.45, 1.0, 0.9, 0.7)
+const MODEL_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.35)
+const MODEL_DISABLED_MULT := Color(0.6, 0.6, 0.6, 0.45)
+const MODEL_CIRCLE_SEGMENTS := 16
 const PATH_AHEAD_COLOR := Color(0.0, 0.85, 1.0, 0.4)
 const PATH_BEHIND_COLOR := Color(0.0, 0.85, 1.0, 0.1)
 
@@ -61,6 +66,7 @@ func _draw() -> void:
 		_draw_floor(room, left_cell, right_cell)
 	for room in rooms:
 		_draw_props(room)
+	_draw_signal_models()
 	_draw_runner_path(section)
 	for room in rooms:
 		if not room.is_exterior():
@@ -185,11 +191,82 @@ func _draw_props(room: FacilityRoom) -> void:
 		var top_left := _to_screen(prop_rect.position.x, prop_rect.position.y)
 		var bottom_right := _to_screen(prop_rect.end.x, prop_rect.end.y)
 		var screen_rect := Rect2(top_left, bottom_right - top_left)
-		_rect(screen_rect, PROP_FILL_COLOR)
-		_rect(screen_rect, PROP_EDGE_COLOR, false, 1.5)
+		var model := WireframeModels.get_model(prop.get("model", &""))
+		if model.is_empty():
+			_rect(screen_rect, PROP_FILL_COLOR)
+			_rect(screen_rect, PROP_EDGE_COLOR, false, 1.5)
+		else:
+			_draw_model(model, screen_rect)
 		var prop_label: String = prop.get("label", "")
 		if not prop_label.is_empty() and screen_rect.size.x > 40.0:
 			_text(screen_rect.position + Vector2(6, 14), prop_label, screen_rect.size.x - 12.0, 11, PROP_LABEL_COLOR)
+
+# --- wireframe models ---
+
+# Hardware under signals (valves, fabricators, consoles...), sized by the model.
+func _draw_signal_models() -> void:
+	var signal_manager = CommandDispatch.signal_manager
+	if signal_manager == null or not signal_manager.visible:
+		return
+	for active_sig in signal_manager.signal_queue:
+		if active_sig == null or active_sig.instance_node == null:
+			continue
+		var model := WireframeModels.get_model(WireframeModels.model_for_signal(active_sig.data))
+		if model.is_empty():
+			continue
+		var size: Vector2 = model["size"]
+		var center: Vector2 = active_sig.instance_node.position
+		var tint := MODEL_DISABLED_MULT if active_sig.is_disabled else Color.WHITE
+		_draw_model(model, Rect2(center - size * 0.5, size), tint)
+
+# Draws a model's parts fitted to `rect` (its footprint on the floor).
+func _draw_model(model: Dictionary, rect: Rect2, tint: Color = Color.WHITE) -> void:
+	_rect(rect, MODEL_SHADOW_COLOR * Color(1, 1, 1, tint.a))
+	var edge := MODEL_EDGE_COLOR * tint
+	var top := MODEL_TOP_COLOR * tint
+	var unit := minf(rect.size.x, rect.size.y)
+	for part in model["parts"]:
+		match part["t"]:
+			"box":
+				var r: Rect2 = part["r"]
+				var z: Vector2 = part["z"]
+				var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+				for i in 4:
+					var a: Vector2 = corners[i]
+					var b: Vector2 = corners[(i + 1) % 4]
+					_line(_project(rect, a, z.x), _project(rect, b, z.x), edge, 1.0)
+					_line(_project(rect, a, z.y), _project(rect, b, z.y), top, 1.4)
+					_line(_project(rect, a, z.x), _project(rect, a, z.y), edge, 1.0)
+			"cyl":
+				var c: Vector2 = part["c"]
+				var radius: float = part["rad"] * unit
+				var z: Vector2 = part["z"]
+				_draw_circle_at(rect, c, radius, z.x, edge, 1.0)
+				_draw_circle_at(rect, c, radius, z.y, top, 1.4)
+				# Silhouette edges, perpendicular to the height projection.
+				var side := WireframeModels.HEIGHT_PROJECTION.normalized().orthogonal() * radius
+				for side_sign in [-1.0, 1.0]:
+					var base: Vector2 = _project(rect, c, z.x) + side * side_sign
+					var tip: Vector2 = _project(rect, c, z.y) + side * side_sign
+					_line(base, tip, edge, 1.0)
+			"ring":
+				_draw_circle_at(rect, part["c"], part["rad"] * unit, part["z"], top, 1.4)
+			"line":
+				var a3: Vector3 = part["a"]
+				var b3: Vector3 = part["b"]
+				_line(_project(rect, Vector2(a3.x, a3.y), a3.z), _project(rect, Vector2(b3.x, b3.y), b3.z), top, 1.2)
+
+func _project(rect: Rect2, normalized: Vector2, z: float) -> Vector2:
+	return rect.position + (normalized * rect.size) + (WireframeModels.HEIGHT_PROJECTION * z)
+
+func _draw_circle_at(rect: Rect2, normalized_center: Vector2, radius: float, z: float, color: Color, width: float) -> void:
+	var center := _project(rect, normalized_center, 0.0) + (WireframeModels.HEIGHT_PROJECTION * z)
+	var prev := center + Vector2(radius, 0.0)
+	for i in range(1, MODEL_CIRCLE_SEGMENTS + 1):
+		var angle := TAU * float(i) / float(MODEL_CIRCLE_SEGMENTS)
+		var next := center + Vector2(cos(angle), sin(angle)) * radius
+		_line(prev, next, color, width)
+		prev = next
 
 # --- walls ---
 

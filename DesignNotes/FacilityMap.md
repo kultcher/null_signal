@@ -80,6 +80,29 @@ func get_rooms() -> Array[FacilityRoom]:
 - Decorative rooms can extend past the map edges; drawing is clipped.
 - `.exterior()` draws an open area with no walls.
 
+### Wireframe objects
+
+`Scripts/Facility/WireframeModels.gd` holds simple wireframe models drawn with
+an oblique projection so they read as 3D (van, guard_booth, reception, lockers,
+carts, decon_shower, charging_rack, plinth, coolant_valve, nanofab,
+breaker_panel, console, interface_rig).
+
+- Props: pass a model as the last argument, and it's drawn fitted to the prop
+  rect: `.prop(0.2, 1.6, 3.3, 4.6, "", &"van")`. Without a model a prop is a flat
+  floor marking.
+- Signals: hardware is drawn under the signal icon. Set it explicitly with
+  `spawn(...).model(&"nanofab")`, or let it be inferred from the id prefix
+  (`coolant_vent_*`, `nano_fabricator_*`, `breaker_panel_*`, terminals; see
+  `SIGNAL_MODEL_BY_PREFIX`). Disabled signals draw dimmed.
+- A model is a footprint plus parts: `_box`, `_cyl`, `_ring`, `_seg`, with x/y
+  normalized to the footprint and heights in pixels.
+
+### Escalation
+
+`RunDefinition.is_escalation_enabled()` (default true). The tutorial returns
+false: heat still builds, but thresholds don't spawn escalation signals or
+raise difficulty.
+
 `Scripts/Facility/facility_map_layer.gd` draws the map;
 `Scripts/Facility/feed_switch_overlay.gd` does the cut.
 

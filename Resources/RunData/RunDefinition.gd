@@ -23,6 +23,12 @@ class SpawnBuilder extends RefCounted:
 		_spawn["spoof_id"] = value
 		return self
 
+	# Wireframe drawn on the map under the signal (see WireframeModels).
+	# Without this, a model is picked from the signal's id where one fits.
+	func model(model_name: StringName) -> SpawnBuilder:
+		_spawn["map_model"] = model_name
+		return self
+
 	func lane(value: int) -> SpawnBuilder:
 		_spawn["lane"] = value
 		return self
@@ -152,10 +158,13 @@ class RoomBuilder extends RefCounted:
 		return self
 
 	# Visual-only furniture. Rect is in cells (x) and lanes (y).
-	func prop(from_cell: float, to_cell: float, lane_top: float, lane_bottom: float, prop_label: String = "") -> RoomBuilder:
+	# Optional `model` names a WireframeModels entry drawn fitted to the rect;
+	# without one the prop is a flat floor marking.
+	func prop(from_cell: float, to_cell: float, lane_top: float, lane_bottom: float, prop_label: String = "", model: StringName = &"") -> RoomBuilder:
 		_room.props.append({
 			"rect": Rect2(from_cell, lane_top, to_cell - from_cell, lane_bottom - lane_top),
 			"label": prop_label,
+			"model": model,
 		})
 		return self
 
@@ -207,6 +216,11 @@ func get_display_name() -> String:
 
 func get_spawns() -> Array[Dictionary]:
 	return []
+
+# Whether heat thresholds spawn escalation signals and raise difficulty.
+# Heat still accumulates either way.
+func is_escalation_enabled() -> bool:
+	return true
 
 # Rooms the runner's path passes through. Runs without rooms fall back to
 # the plain lane grid.
@@ -260,6 +274,8 @@ func build_runtime_signal(spawn: Dictionary) -> SignalData:
 		_override_patrol_points(runtime_signal, spawn, spawn["patrol_points"])
 	if spawn.has("disruptor"):
 		runtime_signal.disruptor = spawn["disruptor"].duplicate(true)
+	if spawn.has("map_model"):
+		runtime_signal.map_model = spawn["map_model"]
 
 	return runtime_signal
 

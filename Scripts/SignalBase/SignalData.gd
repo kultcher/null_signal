@@ -31,6 +31,9 @@ var identity_dict = {
 @export var alternate_visuals: SignalVisuals
 @export var use_alternate_visuals: bool = false
 @export var door_locked: bool = true
+# Wireframe drawn under the signal on the facility map (WireframeModels).
+# Empty = inferred from system_id.
+@export var map_model: StringName = &""
 
 # COMPONENTS
 @export var hackable: HackableComponent

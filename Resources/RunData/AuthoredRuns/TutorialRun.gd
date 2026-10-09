@@ -6,6 +6,10 @@ func get_run_id() -> String:
 func get_display_name() -> String:
 	return "tutorial"
 
+# Heat still builds during the tutorial, but crossing thresholds does nothing.
+func is_escalation_enabled() -> bool:
+	return false
+
 # Feed sections and the runner's route, in (cell, lane) waypoints.
 # Feed 1 covers the yard and security hall. At the end of the hall the route
 # turns down a service stair and the feed cuts to the service corridor, where
@@ -45,8 +49,8 @@ func get_rooms() -> Array[FacilityRoom]:
 			.label("PERIMETER // LOADING YARD") \
 			.exterior() \
 			.lanes(-1.0, 5.0) \
-			.prop(0.2, 1.6, 3.3, 4.6, "VAN") \
-			.prop(5.6, 6.5, -1.0, 1.4, "GUARD BOOTH") \
+			.prop(0.2, 1.6, 3.3, 4.6, "", &"van") \
+			.prop(5.6, 6.4, -0.9, 0.9, "", &"guard_booth") \
 			.build(),
 
 		room("security_hall", 6.5, 17.0) \
@@ -54,8 +58,8 @@ func get_rooms() -> Array[FacilityRoom]:
 			.lanes(-0.5, 4.5) \
 			.opening("top", 11.6, 12.4) \
 			.opening("bottom", 16.2, 17.0) \
-			.prop(7.6, 9.4, -0.5, 0.35, "RECEPTION") \
-			.prop(12.6, 13.4, 3.6, 4.5, "LOCKERS") \
+			.prop(7.6, 9.4, -0.5, 0.35, "", &"reception") \
+			.prop(12.6, 13.4, 3.6, 4.5, "", &"lockers") \
 			.build(),
 
 		# Decorative: offices off the top of the hall, mostly off-screen.
@@ -85,7 +89,7 @@ func get_rooms() -> Array[FacilityRoom]:
 			.lanes(-0.5, 4.5) \
 			.opening("top", 22.0, 22.8) \
 			.opening("bottom", 26.2, 27.0) \
-			.prop(18.5, 19.5, 3.6, 4.5, "CARTS") \
+			.prop(18.5, 19.5, 3.6, 4.5, "", &"carts") \
 			.build(),
 
 		# Decorative side spaces off the corridor.
@@ -104,8 +108,8 @@ func get_rooms() -> Array[FacilityRoom]:
 		room("lab_access", 33.0, 40.5) \
 			.label("LAB ACCESS") \
 			.lanes(0.2, 3.8) \
-			.prop(37.0, 39.5, 0.2, 0.75, "DECON SHOWERS") \
-			.prop(37.0, 39.5, 3.25, 3.8, "DECON SHOWERS") \
+			.prop(37.0, 39.5, 0.2, 0.75, "", &"decon_shower") \
+			.prop(37.0, 39.5, 3.25, 3.8, "", &"decon_shower") \
 			.build(),
 
 		room("clean_lab", 40.5, 48.5) \
@@ -113,7 +117,7 @@ func get_rooms() -> Array[FacilityRoom]:
 			.lanes(-0.8, 4.8) \
 			.prop(42.9, 46.1, -0.8, 0.45, "FAB BAY") \
 			.prop(42.9, 46.1, 3.55, 4.8, "COOLANT RACK") \
-			.prop(46.0, 47.0, 1.45, 2.55, "") \
+			.prop(46.0, 47.0, 1.45, 2.55, "", &"plinth") \
 			.build(),
 
 		room("exit_hall", 48.5, 59.0) \
@@ -133,9 +137,9 @@ func get_rooms() -> Array[FacilityRoom]:
 			.lanes(-0.8, 4.8) \
 			.opening("top", 64.8, 66.2) \
 			.opening("bottom", 68.8, 70.2) \
-			.prop(60.0, 63.0, -0.8, -0.1, "CHARGING RACKS") \
-			.prop(60.0, 63.0, 4.1, 4.8, "CHARGING RACKS") \
-			.prop(73.0, 74.0, 1.45, 2.55, "") \
+			.prop(60.0, 63.0, -0.8, -0.1, "", &"charging_rack") \
+			.prop(60.0, 63.0, 4.1, 4.8, "", &"charging_rack") \
+			.prop(73.0, 74.0, 1.45, 2.55, "", &"plinth") \
 			.build(),
 
 		room("extraction", 75.0, 82.0) \

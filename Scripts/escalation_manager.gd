@@ -8,6 +8,7 @@ const ESCALATION_SIGNAL_SPACING := 72.0
 @export var escalation_thresholds: Array[float] = [0.25, 0.5, 0.75, 1.0]
 
 @onready var heat_manager = $"../HeatManager"
+@onready var run_manager = $"../RunManager"
 @onready var timeline_manager = $"../SignalTimeline/TimelineManager"
 @onready var scan_controller = $"../SignalTimeline/ScanController"
 @onready var terminal_window = $"../WorkspaceAnchor/TerminalWindow"
@@ -66,6 +67,8 @@ func _initialize_tier_state() -> void:
 		_triggered_tiers.append(false)
 
 func _on_heat_state_changed(amount: float, _last_source: String) -> void:
+	if not _is_escalation_enabled():
+		return
 	var heat_ratio := 0.0
 	if heat_manager != null:
 		heat_ratio = heat_manager.get_heat_ratio()
@@ -77,6 +80,11 @@ func _on_heat_state_changed(amount: float, _last_source: String) -> void:
 
 	_update_thresholds(heat_ratio)
 	_refresh_panel()
+
+func _is_escalation_enabled() -> bool:
+	if run_manager == null or run_manager.current_run == null:
+		return true
+	return run_manager.current_run.is_escalation_enabled()
 
 func _update_thresholds(heat_ratio: float) -> void:
 	var new_active_tier := -1
