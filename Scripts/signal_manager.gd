@@ -93,12 +93,7 @@ func update_signal_position():
 			signal_cell_index = active_sig.runtime_cell_x
 			signal_lane = active_sig.runtime_lane_pos
 
-		# Distance from Runner (who is at current_cell_pos)
-		var dist_from_runner_cells = signal_cell_index - timeline_manager.get_view_cell_pos()
-		
-		# Visual Position = Runner's Screen X + Distance * Pixels/Cell
-		var runner_screen_x = timeline_manager.cells_to_pixels(timeline_manager.runner_screen_offset_cells)
-		var visual_x = runner_screen_x + (dist_from_runner_cells * timeline_manager.cell_width_px)
+		var visual_x: float = timeline_manager.cell_to_screen_x(signal_cell_index)
 		var is_on_screen = visual_x > -200 and visual_x < timeline_manager.screen_width + 200
 		
 		if is_on_screen:
@@ -115,7 +110,7 @@ func update_signal_position():
 				if scan_controller != null and scan_controller.has_method("sync_signal_queue_visuals"):
 					scan_controller.sync_signal_queue_visuals()
 			
-			var visual_y = (signal_lane * timeline_manager.lane_height) + (timeline_manager.lane_height * 0.5)
+			var visual_y: float = timeline_manager.lane_to_y(signal_lane)
 			var render_offset := active_sig.runtime_render_offset
 			active_sig.instance_node.position = Vector2(visual_x, visual_y) + render_offset
 			

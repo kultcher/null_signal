@@ -122,6 +122,46 @@ class SpawnBuilder extends RefCounted:
 		_spawn["ic_modules"] = ic
 		return ic
 
+class RoomBuilder extends RefCounted:
+	var _room := FacilityRoom.new()
+
+	func _init(room_id: String, start_cell: float, end_cell: float) -> void:
+		_room.id = room_id
+		_room.label = room_id.to_upper().replace("_", " ")
+		_room.start_cell = start_cell
+		_room.end_cell = end_cell
+
+	func label(text: String) -> RoomBuilder:
+		_room.label = text
+		return self
+
+	# Vertical extent in lanes. Edges usually sit half a lane outside the
+	# outermost lane used by signals, e.g. lanes(-0.5, 4.5) for a full-width room.
+	func lanes(top: float, bottom: float) -> RoomBuilder:
+		_room.lane_top = top
+		_room.lane_bottom = bottom
+		return self
+
+	func exterior() -> RoomBuilder:
+		_room.kind = FacilityRoom.Kind.EXTERIOR
+		return self
+
+	# A gap in the top or bottom wall (side corridor, vent, loading bay...).
+	func opening(side: String, from_cell: float, to_cell: float) -> RoomBuilder:
+		_room.wall_openings.append({"side": side, "from_cell": from_cell, "to_cell": to_cell})
+		return self
+
+	# Visual-only furniture. Rect is in cells (x) and lanes (y).
+	func prop(from_cell: float, to_cell: float, lane_top: float, lane_bottom: float, prop_label: String = "") -> RoomBuilder:
+		_room.props.append({
+			"rect": Rect2(from_cell, lane_top, to_cell - from_cell, lane_bottom - lane_top),
+			"label": prop_label,
+		})
+		return self
+
+	func build() -> FacilityRoom:
+		return _room
+
 const BASIC_CAMERA := preload("res://Resources/SignalPrefabs/basic_camera.tres")
 const BASIC_DRONE := preload("res://Resources/SignalPrefabs/basic_drone.tres")
 const BASIC_DOOR := preload("res://Resources/SignalPrefabs/basic_door.tres")
@@ -140,6 +180,17 @@ func get_display_name() -> String:
 
 func get_spawns() -> Array[Dictionary]:
 	return []
+
+# Rooms the runner's path passes through. Runs without rooms fall back to
+# the plain lane grid.
+func get_rooms() -> Array[FacilityRoom]:
+	return []
+
+func room(room_id: String, start_cell: float, end_cell: float) -> RoomBuilder:
+	return RoomBuilder.new(room_id, start_cell, end_cell)
+
+func build_facility_layout() -> FacilityLayout:
+	return FacilityLayout.new(get_rooms())
 
 func spawn(signal_data: SignalData, cell_index: float) -> SpawnBuilder:
 	return SpawnBuilder.new(self, signal_data, cell_index)

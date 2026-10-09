@@ -83,7 +83,7 @@ func _run_intro_sequence() -> void:
 	_set_cutscene_black_screen(true)
 	await _show_dialogue([
 		"All right kid, you ready for the real deal?"
-	], "", Rect2(), Vector2(750, 300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 
 	await cutscene_controller.play_intro_glitch_transition(3)
 	signal_manager.show_signals()
@@ -91,15 +91,21 @@ func _run_intro_sequence() -> void:
 	await _show_dialogue([
 		"Just like the sims, right? Only if you fuck it up, it might actually get me killed. No pressure.",
 		"Don't sweat it, should be a milk run. We'll take it nice and slow, and not just because I'm getting old."
-	], "", Rect2(), Vector2(750, 300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 
 	_release_runner_hold("intro")
 	await get_tree().create_timer(1.0).timeout
 	_focus_runner()
-	await _show_dialogue([
+	var intro_lines: Array[String] = [
 		"All right, I'm on the move. You should already be seeing some network SIGNALs registering on the timeline.",
 		"It'll look they're moving toward me, but it's all relative\u2014I'm moving toward them. The stationary ones, anyway."
-	], "", window_manager.get_control_focus_rect(runner_focus_panel), Vector2(), false, 2, "intro_walk_and_talk")
+	]
+	if timeline_manager.map_mode:
+		intro_lines = [
+			"All right, I'm on the move. You should already be seeing the floorplan, and some network SIGNALs registering on it.",
+			"Your feed's locked on me, so the map moves as I do. Whatever's to my right, I'm walking into."
+		]
+	await _show_dialogue(intro_lines, "", window_manager.get_control_focus_rect(runner_focus_panel), Vector2(), false, 2, "intro_walk_and_talk")
 	_set_objective("- Wait for Blackjack to get into position\n- Hold the [color=cyan]-> arrow key[/color] to tell him to hustle.")
 
 func _run_cam_01_sequence() -> void:
@@ -185,7 +191,7 @@ func _run_cam_02_intro_sequence() -> void:
 	await _wait_for_cell(10)
 	_acquire_runner_hold("cam_02_gate")
 	await _show_dialogue([
-		"Camera ahead, center lane. Give it a scan."
+		"Camera ahead, covering the hall. Give it a scan." if timeline_manager.map_mode else "Camera ahead, center lane. Give it a scan."
 	], "cam_02")
 	_set_objective("- Right click the cam_02 signal to scan it")
 	await _wait_for_scan_complete("cam_02")
@@ -280,7 +286,7 @@ func _run_null_door_intro_sequence():
 	await _show_dialogue([
 		"...",
 		"What the fuck...?",
-	], "", Rect2(), Vector2(750, 300), true, 43.5, "null_lab_leadup")
+	], "", Rect2(), _center_dialogue_pos(), true, 43.5, "null_lab_leadup")
 	_release_runner_hold("null_terminal_gate_01")
 
 
@@ -301,7 +307,7 @@ func _run_lab_reveal_sequence() -> void:
 		"...",
 		"I found a terminal here to kill the local security. The cameras and drones should be out.",
 		"You need to come inside and see this."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 
 	GlobalEvents.heat_set_requested.emit(0)
 	window_manager.objective_tracker.hide()
@@ -318,7 +324,7 @@ func _run_lab_reveal_sequence() -> void:
 		"You're too young to remember, but the AIs starting to speak their own language before they left. One we didn't... maybe couldn't understand.",
 		"If I'm reading this right... this thing was meant meant to translate. To interface.",
 		"Some of the files are encrypted. Need your deck if we're going to crack them."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 
 	await get_tree().create_timer(1).timeout
 	await cutscene_controller.play_still_reveal(2.2)
@@ -328,7 +334,7 @@ func _run_lab_reveal_sequence() -> void:
 		"... Anyway.",
 		"This works out, actually — you can try the DECRYPT program without someone's life on the line. Plug in directly, I'll walk you through it.",
 		"It's just like the Sniff program from earlier, just RUN decrypt in the terminal."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 	window_manager.objective_tracker.show()
 	_set_objective("RUN decrypt on the null_terminal")
 
@@ -363,7 +369,7 @@ func _run_lab_reveal_sequence() -> void:
 		"This could change everything...",
 		"...Or at least be worth more than either of us will see in a lifetime.",
 		"We'll figure out what to do with it when we're home. For now, let's grab it and go. I'm disengaging the lock."
-		], "", Rect2(), Vector2(750,300), true)
+		], "", Rect2(), _center_dialogue_pos(), true)
 
 	await get_tree().create_timer(2).timeout
 	print("timer")
@@ -380,7 +386,7 @@ func _run_alarm_sequence():
 		"Facility's locking down and... That's a lot of drones.",
 		"...",
 		"Seeing a manual shutdown on this terminal. Air-gapped, so no remote access — I'll have to get to it on foot. Jack in, kid. Gonna need your eyes."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 
 	await get_tree().create_timer(2).timeout
 	
@@ -406,7 +412,7 @@ func _run_alarm_sequence():
 	await _show_dialogue([
 		"Clip, they woke up angry. Can hear 'em clanking.",
 		"Incoming. See what you can do, kid."
-	], "", Rect2(), Vector2(750,300), true, 50.5)
+	], "", Rect2(), _center_dialogue_pos(), true, 50.5)
 	window_manager.objective_tracker.show()
 
 	_set_objective("Try to stop the combat drone")
@@ -421,7 +427,7 @@ func _run_alarm_sequence():
 	
 	temp_dialogue = await _show_dialogue([
 		"It's almost on me. Kid!?"
-	], "", Rect2(), Vector2(750,300), true, -1, "", 3)
+	], "", Rect2(), _center_dialogue_pos(), true, -1, "", 3)
 
 	# NOTE: Make sure this can't get set by anything other than the drone combat
 	await GlobalEvents.runners_stopped
@@ -429,7 +435,7 @@ func _run_alarm_sequence():
 
 	temp_dialogue = await _show_dialogue([
 			"Manual override it is!"
-		], "", Rect2(), Vector2(750,300), true, -1, "", 3)
+		], "", Rect2(), _center_dialogue_pos(), true, -1, "", 3)
 
 	await get_tree().create_timer(4)
 
@@ -448,7 +454,7 @@ func _run_pre_gauntlet_sequence():
 
 	await _show_dialogue([
 		"You've gotta be kidding me."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 
 	await get_tree().create_timer(.5).timeout
 
@@ -465,7 +471,7 @@ func _run_pre_gauntlet_sequence():
 		"You use the Null Spike.",
 		"Not gonna lie, it's risky. [b]If[/b] I understood it right and [b]if[/b] it actually works...",
 		"You might be able to see the network the way the ghosters did when they built it. Or as close to that as a human is capable."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 
 	await get_tree().create_timer(2)
 	timeline_manager.clear_view_offset(1.0)
@@ -484,7 +490,7 @@ func _run_pre_gauntlet_sequence():
 		"And I'm asking you to do the same thing. With tech we found minutes ago in a place the AIs never meant for us to find.",
 		"...I'm sorry kid. Wouldn't ask if I saw another way.",
 		"If you want to do this, you'll need to prep your deck. [b][color=cyan]INTERFACE NS_01a.sys -u -c[/color][/b]\nThen plug back in."
-	], "",  window_manager.get_control_focus_rect(runner_focus_panel), Vector2(750,300), true)
+	], "",  window_manager.get_control_focus_rect(runner_focus_panel), _center_dialogue_pos(), true)
 
 	_enable_feature("terminal_commands", true)
 	
@@ -497,7 +503,7 @@ func _run_pre_gauntlet_sequence():
 		"Well, your brain is still uncooked. That's a start.",
 		"Well, let's see what this thing can do. Once I'm in relay range, activate the null spike... and then clear me a path.",
 		"You've got this kid. I picked you for a reason."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 	_set_objective("- Wait for Blackjack to get within range of the drones")
 	_release_runner_hold("pre_gauntlet_02")
 
@@ -506,7 +512,7 @@ func _run_gauntlet_sequence():
 	_acquire_runner_hold("pre_gauntlet_03")
 	_show_dialogue([
 		"This is it. Cross your fingers and hit the Spike.\nReady when you are."
-	], "", Rect2(), Vector2(750,300), true)
+	], "", Rect2(), _center_dialogue_pos(), true)
 	_set_objective("- Press Left Shift to activate the Null Spike
 - Use your tools to help Blackjack get past the drones
 - RUN sniff or RUN decrypt to access locked signals
@@ -703,6 +709,15 @@ func _stop_cutscene_alarm(fade_duration: float = 0.35) -> void:
 		return
 	await cutscene_controller.stop_alarm_effects(fade_duration)
 
+# Free-floating dialogue position. The old timeline strip left empty space
+# under it; the facility map fills that space, so during gameplay in map mode
+# the dialogue docks to the right of the terminal instead. Cutscenes (signals
+# hidden) keep the centered position.
+func _center_dialogue_pos() -> Vector2:
+	if timeline_manager != null and timeline_manager.map_mode and signal_manager.visible:
+		return Vector2(1490, 630)
+	return Vector2(750, 300)
+
 func _set_runner_cell(cell_pos: float) -> void:
 	if timeline_manager == null:
 		return
@@ -783,6 +798,12 @@ func _show_dialogue(
 	auto_dismiss: int = 0
 ) -> void:
 	var resolved_focus_rect := _apply_focus(signal_id, focus_rect)
+	# On the facility map, targets sit mid-screen and often move, so anchoring
+	# the dialogue next to them covers the action. Dock it instead; the focus
+	# overlay still points at the target.
+	if timeline_manager.map_mode and not has_custom_position:
+		default_position = _center_dialogue_pos()
+		has_custom_position = true
 	GlobalEvents.tutorial_lock_changed.emit(true)
 	var dialogue = window_manager.show_tutorial_dialogue(
 		dialogue_pages,
@@ -939,7 +960,7 @@ func _runner_detected_dialogue():
 	if timeline_manager.current_cell_pos > 41: return
 	_show_dialogue([
 		"Agh, it pinged me. Shouldn't be a problem. Quick glances don't build much heat."
-		], "", Rect2(), Vector2(750, 300), true, -1, "", 3
+		], "", Rect2(), _center_dialogue_pos(), true, -1, "", 3
 	)
 
 func _await_signal_args(signal_to_wait: Signal) -> Array:

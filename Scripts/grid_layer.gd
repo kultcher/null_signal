@@ -19,9 +19,33 @@ var CELL_GRID_COLOR = Color(0.275, 0.699, 0.771, 0.2)
 
 var time_elapsed: float = 0.0
 
+# Full-width backdrop/overlay rects that should cover the whole map area.
+@onready var _backdrop_rects: Array[Control] = [
+	$TimelineBaseRect,
+	$TimelineBreathEffect,
+	$TimelineDataStream,
+	$NullSpikeSyncOverlay,
+]
+@onready var facility_map_layer = get_node_or_null("FacilityMapLayer")
+
 func _ready():
 	if runner_team:
 		_update_runner_team_position()
+	_apply_map_layout()
+	timeline_manager.layout_changed.connect(func(_size: Vector2) -> void: _apply_map_layout())
+
+func _apply_map_layout() -> void:
+	if not timeline_manager.map_mode:
+		return
+	var map_height: float = timeline_manager.get_timeline_height()
+	for rect in _backdrop_rects:
+		if rect == null:
+			continue
+		rect.offset_right = timeline_manager.screen_width
+		rect.offset_bottom = rect.offset_top + map_height + 10.0
+
+func _has_facility_rooms() -> bool:
+	return facility_map_layer != null and facility_map_layer.has_rooms()
 
 func _process(delta):
 	queue_redraw()
@@ -36,19 +60,22 @@ func _process(delta):
 func _update_runner_team_position() -> void:
 	if runner_team == null:
 		return
-	var x_pos = timeline_manager.cells_to_pixels(
-		timeline_manager.runner_screen_offset_cells - timeline_manager.view_offset_cells
-	)
-	var y_pos = (timeline_manager.lane_height * 2.5)
-	runner_team.position = Vector2(x_pos, y_pos)
+	runner_team.position = timeline_manager.get_runner_screen_pos()
 
 func _draw():
 	cell_width = timeline_manager.cell_width_px
 	lane_height = timeline_manager.lane_height
+	var lane_top: float = timeline_manager.lane_origin_y
+	var lane_bottom: float = lane_top + (lane_height * timeline_manager.LANES)
+
+	# Facility map draws its own floorplan; the lane grid is only a fallback
+	# for runs without authored rooms.
+	if _has_facility_rooms():
+		return
 
 	## --- DRAW HORIZONTAL LANES ---
 	for i in range(timeline_manager.LANES + 1):
-		var y_pos = i * lane_height
+		var y_pos = lane_top + (i * lane_height)
 		draw_line(
 			Vector2(0, y_pos),
 			Vector2(screen_width, y_pos),
@@ -77,8 +104,8 @@ func _draw():
 	while draw_x < screen_width + cell_width:
 		if draw_x > -10: 
 			draw_line(
-				Vector2(draw_x, 0), 
-				Vector2(draw_x, lane_height * timeline_manager.LANES),
+				Vector2(draw_x, lane_top),
+				Vector2(draw_x, lane_bottom),
 				CELL_GRID_COLOR, 
 				2.0) 
 		draw_x += cell_width

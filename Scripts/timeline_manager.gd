@@ -16,6 +16,16 @@ extends Node2D
 
 @export var signal_interaction_range_cells: float = 8.0
 
+# MAP MODE
+# When enabled, the timeline strip is replaced by a top-down facility map.
+# Progress along the runner's path is still measured in cells, so the
+# time-to-contact model (and everything keyed on cells) is unchanged.
+# Lanes become real vertical positions inside rooms.
+@export var map_mode: bool = true
+@export var map_height_px: float = 560.0
+@export var map_lane_spacing_px: float = 90.0
+@export var path_lane: float = 2.0
+
 @export var signal_sweep_enabled: bool = true
 @export var signal_sweep_cycle_sec: float = 8.5
 @export var signal_sweep_start_x: float = -0.1
@@ -29,6 +39,7 @@ var screen_width: float
 var screen_height: float
 var cell_width_px: float
 var lane_height: float
+var lane_origin_y: float = 0.0
 
 # STATE
 var cells_per_second: float = BASE_CELLS_PER_SECOND
@@ -42,6 +53,7 @@ var _time_scale_tween: Tween
 var _view_offset_tween: Tween
 var view_offset_cells: float = 0.0
 var signal_sweep_normalized_x: float = 1.1
+var facility_layout: FacilityLayout = FacilityLayout.new()
 
 # REGISTRATION
 @onready var signal_manager = $"../SignalManager"
@@ -77,7 +89,7 @@ func _process(delta):
 		last_emitted_cell = current_cell
 		GlobalEvents.cell_reached.emit(current_cell)
 
-func cells_to_pixels(cells: float):
+func cells_to_pixels(cells: float) -> float:
 	return cells * cell_width_px
 
 func get_view_cell_pos() -> float:
@@ -100,7 +112,33 @@ func clear_view_offset(duration: float = 0.0) -> void:
 	set_view_offset_cells(0.0, duration)
 
 func get_timeline_height() -> float:
+	if map_mode:
+		return map_height_px
 	return lane_height * LANES
+
+# --- SPATIAL CONVERSIONS ---
+# Everything that places things on screen should go through these, so the
+# underlying layout (lanes today, a real path later) can change in one place.
+
+func lane_to_y(lane_pos: float) -> float:
+	return lane_origin_y + (lane_pos * lane_height) + (lane_height * 0.5)
+
+func cell_to_screen_x(cell: float) -> float:
+	var runner_screen_x := cells_to_pixels(runner_screen_offset_cells)
+	return runner_screen_x + ((cell - get_view_cell_pos()) * cell_width_px)
+
+func cell_lane_to_screen(cell: float, lane_pos: float) -> Vector2:
+	return Vector2(cell_to_screen_x(cell), lane_to_y(lane_pos))
+
+func screen_x_to_cell(screen_x: float) -> float:
+	var runner_screen_x := cells_to_pixels(runner_screen_offset_cells)
+	return get_view_cell_pos() + ((screen_x - runner_screen_x) / maxf(1.0, cell_width_px))
+
+func get_runner_screen_pos() -> Vector2:
+	return Vector2(
+		cells_to_pixels(runner_screen_offset_cells - view_offset_cells),
+		lane_to_y(path_lane)
+	)
 
 func get_viewport_size() -> Vector2:
 	return Vector2(screen_width, screen_height)
@@ -114,8 +152,13 @@ func _refresh_layout_metrics() -> void:
 	screen_height = viewport_size.y
 
 	cell_width_px = screen_width / VISIBLE_CELLS
-	var timeline_height := clampf(screen_height * timeline_height_ratio, min_timeline_height_px, max_timeline_height_px)
-	lane_height = timeline_height / LANES
+	if map_mode:
+		lane_height = map_lane_spacing_px
+		lane_origin_y = (map_height_px - (lane_height * LANES)) * 0.5
+	else:
+		var timeline_height := clampf(screen_height * timeline_height_ratio, min_timeline_height_px, max_timeline_height_px)
+		lane_height = timeline_height / LANES
+		lane_origin_y = 0.0
 	layout_changed.emit(viewport_size)
 
 func _update_signal_sweep(delta: float) -> void:

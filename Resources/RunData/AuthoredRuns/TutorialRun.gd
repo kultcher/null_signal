@@ -6,6 +6,75 @@ func get_run_id() -> String:
 func get_display_name() -> String:
 	return "tutorial"
 
+# Floorplan. The runner's path runs straight along lane 2; room boundaries
+# line up with the doors the path passes through.
+func get_rooms() -> Array[FacilityRoom]:
+	return [
+		room("perimeter", -3.0, 6.5) \
+			.label("PERIMETER // LOADING YARD") \
+			.exterior() \
+			.lanes(-1.0, 5.0) \
+			.prop(0.2, 1.6, 3.3, 4.6, "VAN") \
+			.prop(5.6, 6.5, -1.0, 1.4, "GUARD BOOTH") \
+			.build(),
+
+		room("security_hall", 6.5, 17.0) \
+			.label("SECURITY HALL") \
+			.lanes(-0.5, 4.5) \
+			.prop(7.6, 9.4, -0.5, 0.35, "RECEPTION") \
+			.prop(12.6, 13.4, 3.6, 4.5, "LOCKERS") \
+			.build(),
+
+		room("service_corridor", 17.0, 33.0) \
+			.label("SERVICE CORRIDOR") \
+			.lanes(-0.5, 4.5) \
+			.opening("top", 22.0, 22.8) \
+			.opening("bottom", 26.2, 27.0) \
+			.prop(18.5, 19.5, 3.6, 4.5, "CARTS") \
+			.build(),
+
+		room("lab_access", 33.0, 40.5) \
+			.label("LAB ACCESS") \
+			.lanes(0.2, 3.8) \
+			.prop(37.0, 39.5, 0.2, 0.75, "DECON SHOWERS") \
+			.prop(37.0, 39.5, 3.25, 3.8, "DECON SHOWERS") \
+			.build(),
+
+		room("clean_lab", 40.5, 48.5) \
+			.label("CLEANROOM // R&D") \
+			.lanes(-0.8, 4.8) \
+			.prop(42.9, 46.1, -0.8, 0.45, "FAB BAY") \
+			.prop(42.9, 46.1, 3.55, 4.8, "COOLANT RACK") \
+			.prop(46.0, 47.0, 1.45, 2.55, "") \
+			.build(),
+
+		room("exit_hall", 48.5, 59.0) \
+			.label("EXIT HALL") \
+			.lanes(-0.5, 4.5) \
+			.build(),
+
+		room("drone_bay", 59.0, 75.0) \
+			.label("DRONE BAY") \
+			.lanes(-0.8, 4.8) \
+			.opening("top", 64.8, 66.2) \
+			.opening("bottom", 68.8, 70.2) \
+			.prop(60.0, 63.0, -0.8, -0.1, "CHARGING RACKS") \
+			.prop(60.0, 63.0, 4.1, 4.8, "CHARGING RACKS") \
+			.prop(73.0, 74.0, 1.45, 2.55, "") \
+			.build(),
+
+		room("extraction", 75.0, 82.0) \
+			.label("EXTRACTION") \
+			.exterior() \
+			.lanes(-1.0, 5.0) \
+			.build(),
+	]
+
+# Map-mode tuning: lanes are 90px apart on the facility map (54px on the old
+# timeline strip), so side lanes sit further from the runner's path.
+# - Vertical patrollers move at 0.25 cells/s (0.15 * 90/54) to keep their
+#   original crossing timing, with longer sensor cones to cover the same lanes.
+# - Side/wall cameras reach a little further.
 func get_spawns() -> Array[Dictionary]:
 	return [
 		spawn(BASIC_CAMERA, 3.5) \
@@ -27,6 +96,7 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(PANNING_CAMERA, 11.5) \
 			.id("cam_02") \
 			.lane(3) \
+			.vision(30.0, 1.25) \
 			.add_ic_custom("reboot", {"reboot_time": 10.0}) \
 			.build(),
 
@@ -34,6 +104,7 @@ func get_spawns() -> Array[Dictionary]:
 			.id("drone_01") \
 			.lane(3) \
 			.add_ic_custom("reboot", {"reboot_time": 3.0}) \
+			.move_speed(0.2) \
 			.patrol([0.0, -2, 1, 0], [1.0, -2, 1, 0], [1.0, 0, 1, 0], [0.0, 0, 1, 0]) \
 			.build(),
 
@@ -56,7 +127,7 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(PANNING_CAMERA, 23.5) \
 			.id("cam_04") \
 			.lane(4) \
-			.vision(20.0, 1.0) \
+			.vision(20.0, 1.2) \
 			.detection_sweep([1, 3.5], [180, 3.5]) \
 			.add_ic_custom("reboot", {"reboot_time": 10.0}) \
 			.build(),
@@ -72,7 +143,7 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(BASIC_CAMERA, 26.5) \
 			.id("cam_05") \
 			.lane(0) \
-			.vision(20.0, 1.0) \
+			.vision(20.0, 1.2) \
 			.detection_sweep([-1, 3.5], [180, 3.5]) \
 			.add_ic_custom("reboot", {"reboot_time": 15.0}) \
 			.build(),
@@ -80,7 +151,7 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(PANNING_CAMERA, 29.5) \
 			.id("cam_06") \
 			.lane(4) \
-			.vision(20.0, 1.0) \
+			.vision(20.0, 1.2) \
 			.detection_sweep([1, 3.5], [180, 3.5]) \
 			.add_ic_custom("reboot", {"reboot_time": 3.0}) \
 			.build(),
@@ -97,6 +168,7 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(BASIC_DRONE, 31.0) \
 			.id("drone_03") \
 			.lane(3) \
+			.vision(60.0, 0.65) \
 			.patrol([0.0, 0, 3, 0], [-6, 0, 3, 0]) \
 			.build(),
 
@@ -190,6 +262,8 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(COMBAT_DRONE, 65.5) \
 			.id("c_drone_02") \
 			.lane(1) \
+			.move_speed(0.25) \
+			.vision(60.0, 0.8) \
 			.patrol([0.0, -1, 3, 0], [0.0, 2, 3, 0]) \
 			.add_ic_custom("faraday", {"max_runner_distance_cells": 3.0}) \
 			.build(),
@@ -197,6 +271,8 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(COMBAT_DRONE, 67.5) \
 			.id("c_drone_03") \
 			.lane(2) \
+			.move_speed(0.25) \
+			.vision(60.0, 0.8) \
 			.patrol([0.0, -1, 3, 0], [0.0, 2, 3, 0]) \
 			.add_puzzle("sniff", 1) \
 			.build(),
@@ -209,6 +285,8 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(COMBAT_DRONE, 69.5) \
 			.id("c_drone_04") \
 			.lane(3) \
+			.move_speed(0.25) \
+			.vision(60.0, 0.8) \
 			.patrol([0.0, -2, .5, 0], [0.0, 0, .5, 0]) \
 			.add_ic_custom("reboot", {"reboot_time": 3.0}) \
 			.build(),
@@ -222,6 +300,8 @@ func get_spawns() -> Array[Dictionary]:
 		spawn(COMBAT_DRONE, 71.5) \
 			.id("c_drone_05") \
 			.lane(4) \
+			.move_speed(0.25) \
+			.vision(60.0, 0.8) \
 			.patrol([0.0, -4, 3, 0], [0.0, 0, 3, 0]) \
 			.add_puzzle("sniff", 1) \
 			.build(),

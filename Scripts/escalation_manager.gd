@@ -100,6 +100,9 @@ func _on_timeline_layout_changed(_viewport_size: Vector2) -> void:
 func _refresh_anchor_layout() -> void:
 	if escalation_panel == null or escalation_anchor == null:
 		return
+	if timeline_manager != null:
+		# Sit just under the timeline strip / facility map.
+		escalation_panel.position.y = timeline_manager.get_timeline_height() + 5.0
 	escalation_anchor.position = escalation_panel.get_rect().get_center()
 
 func _refresh_panel() -> void:

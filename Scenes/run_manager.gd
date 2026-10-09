@@ -19,6 +19,8 @@ func _process(delta: float):
 func start_run():
 	var level_script = load(level_script_path)
 	current_run = level_script.new()
+	if timeline_manager != null:
+		timeline_manager.facility_layout = current_run.build_facility_layout()
 	propagate()
 
 func propagate():
