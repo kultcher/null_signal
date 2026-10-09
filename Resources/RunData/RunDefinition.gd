@@ -481,6 +481,11 @@ func _create_ic_module(name: String) -> ICModule:
 		"haze": func() -> ICModule: return HazeModule.new(),
 		"callback": func() -> ICModule: return CallbackModule.new(),
 		"trace": func() -> ICModule: return TraceModule.new(),
+		"tripwire": func() -> ICModule: return TripwireModule.new(),
+		"siphon": func() -> ICModule: return SiphonModule.new(),
+		"heartbeat": func() -> ICModule: return HeartbeatModule.new(),
+		"tether": func() -> ICModule: return TetherModule.new(),
+		"shy": func() -> ICModule: return ShyModule.new(),
 	}
 	var factory = factory_map.get(name, null)
 	if factory == null:

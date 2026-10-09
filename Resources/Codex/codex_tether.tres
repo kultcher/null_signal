@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CodexEntry" format=3]
+
+[ext_resource type="Texture2D" path="res://Visuals/Icons/Simple/cage.svg" id="1_icon"]
+[ext_resource type="Script" uid="uid://bcwfqttb2lhqa" path="res://Scripts/codex_entry.gd" id="2_entry"]
+
+[resource]
+script = ExtResource("2_entry")
+codex_id = &"tether"
+title = "Tether"
+category = "IC"
+extra = "Threat Level: 2"
+icon = ExtResource("1_icon")
+body_text = "While connected, all other links are suspended: you can't connect to or command other signals until this one is down or you disconnect. Some tethers charge heat for leaving early. Scanning still works."

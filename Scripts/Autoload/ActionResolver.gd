@@ -8,6 +8,9 @@ var _pending_actions: Array[ActionContext] = []
 var _is_processing_actions := false
 const DEBUG_PREFIX := "[ActionResolver]"
 
+# Per-action trace output. Noisy; flip off when not debugging the pipeline.
+var debug_logging := true
+
 func build_scan_action(target_signal: ActiveSignal) -> ActionContext:
 	var action := ActionContext.create_system_action(
 		ActionContext.ActionType.START_SCAN_SIGNAL,
@@ -69,11 +72,25 @@ func build_action_from_command(cmd_context: CommandContext) -> ActionContext:
 	_debug_action("build", action, "from command " + str(cmd_context.command))
 	return action
 
+# Resolves an action *now* and returns it with its final status. Callers
+# (terminal commands, scan starts) read the result immediately, so this must
+# not be deferred even if another action is mid-resolution: if the queue is
+# already draining, the action is resolved nested, right away. Follow-up
+# actions it spawns still go through the queue.
 func resolve_action(action_context: ActionContext) -> ActionContext:
 	if action_context == null:
 		return null
 
 	_debug_action("resolve_request", action_context)
+	action_context.ensure_lineage_defaults()
+	if _is_processing_actions:
+		# Resolve it and the follow-ups it queues before handing it back;
+		# actions that were already pending keep their place.
+		var first_followup := _pending_actions.size()
+		_resolve_single_action(action_context)
+		while _pending_actions.size() > first_followup:
+			_resolve_single_action(_pending_actions.pop_at(first_followup))
+		return action_context
 	enqueue_action(action_context)
 	return action_context
 
@@ -122,9 +139,14 @@ func _run_preprocessors(action_context: ActionContext) -> void:
 	_debug_action("preprocess", action_context)
 	ProgramManager.preprocess_action(action_context)
 	var target := action_context.primary_target
-	if target == null or target.data == null or target.data.ic_modules == null:
+	if target != null and target.data != null and target.data.ic_modules != null:
+		target.data.ic_modules.process_action(action_context)
+	if action_context.was_unsuccessful():
 		return
-	target.data.ic_modules.process_action(action_context)
+	for observer in _get_session_observers(target):
+		observer.data.ic_modules.process_external_action(action_context, observer)
+		if action_context.was_unsuccessful():
+			return
 
 func _apply_core_effect(action_context: ActionContext) -> void:
 	if action_context == null or action_context.was_unsuccessful():
@@ -167,9 +189,25 @@ func _run_postprocessors(action_context: ActionContext) -> void:
 	_debug_action("postprocess", action_context)
 	ProgramManager.postprocess_action(action_context)
 	var target := action_context.primary_target
-	if target == null or target.data == null or target.data.ic_modules == null:
-		return
-	target.data.ic_modules.postprocess_action(action_context)
+	if target != null and target.data != null and target.data.ic_modules != null:
+		target.data.ic_modules.postprocess_action(action_context)
+	for observer in _get_session_observers(target):
+		observer.data.ic_modules.postprocess_external_action(action_context, observer)
+
+# Signals other than `target` that have an open terminal session and IC.
+# Their modules get to see (and veto) actions aimed elsewhere, which is how
+# session-scoped IC like Tether work.
+func _get_session_observers(target: ActiveSignal) -> Array[ActiveSignal]:
+	var observers: Array[ActiveSignal] = []
+	if CommandDispatch.signal_manager == null:
+		return observers
+	for sig in CommandDispatch.signal_manager.signal_queue:
+		if sig == null or sig == target or sig.data == null or sig.data.ic_modules == null:
+			continue
+		if sig.terminal_session == null or not sig.terminal_session.has_tab:
+			continue
+		observers.append(sig)
+	return observers
 
 func _apply_access_signal(action_context: ActionContext) -> void:
 	var target := action_context.primary_target
@@ -446,16 +484,23 @@ func _emit_terminal_outcome(action_context: ActionContext) -> void:
 	if action_context == null:
 		return
 
+	# Follow-ups (e.g. KILL -> DISABLE_SIGNAL) share the root command's
+	# context. Successful steps add their lines; a failing step replaces the
+	# log with its reason (the terminal shows the first line of a failure),
+	# and once a command has failed a later successful step can't flip it back.
 	var cmd_context := action_context.command_context
 	if cmd_context != null:
-		cmd_context.log_text = action_context.log_text.duplicate()
 		match action_context.status:
 			ActionContext.Status.FAILURE, ActionContext.Status.BLOCKED:
+				cmd_context.log_text = action_context.log_text.duplicate()
 				cmd_context.status = CommandContext.CommandStatus.FAILURE
 			ActionContext.Status.SUCCESS:
-				cmd_context.status = CommandContext.CommandStatus.SUCCESS
+				if cmd_context.status != CommandContext.CommandStatus.FAILURE:
+					cmd_context.log_text.append_array(action_context.log_text)
+					cmd_context.status = CommandContext.CommandStatus.SUCCESS
 			_:
-				cmd_context.status = CommandContext.CommandStatus.PROCESS
+				if cmd_context.status != CommandContext.CommandStatus.FAILURE:
+					cmd_context.status = CommandContext.CommandStatus.PROCESS
 
 	if action_context.was_unsuccessful():
 		action_failed.emit(action_context)
@@ -521,6 +566,8 @@ func _disable_signal_target(target: ActiveSignal, action_context: ActionContext 
 	return true
 
 func _debug_action(stage: String, action_context: ActionContext, details: String = "") -> void:
+	if not debug_logging:
+		return
 	if action_context == null:
 		print(DEBUG_PREFIX + " [" + stage + "] <null>")
 		return

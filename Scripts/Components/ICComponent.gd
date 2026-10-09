@@ -35,6 +35,19 @@ func postprocess_action(action_context: ActionContext) -> void:
 			continue
 		module.postprocess_action(action_context)
 
+# Actions aimed at *other* signals while this signal has an open session.
+func process_external_action(action_context: ActionContext, host_sig: ActiveSignal) -> void:
+	for module in modules:
+		if module == null:
+			continue
+		module.process_external_action(action_context, host_sig)
+
+func postprocess_external_action(action_context: ActionContext, host_sig: ActiveSignal) -> void:
+	for module in modules:
+		if module == null:
+			continue
+		module.postprocess_external_action(action_context, host_sig)
+
 func notify_connected(active_sig: ActiveSignal):
 	for module in modules:
 		module.on_connect(active_sig)

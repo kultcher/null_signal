@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CodexEntry" format=3]
+
+[ext_resource type="Texture2D" path="res://Visuals/Icons/Simple/radar-blank.svg" id="1_icon"]
+[ext_resource type="Script" uid="uid://bcwfqttb2lhqa" path="res://Scripts/codex_entry.gd" id="2_entry"]
+
+[resource]
+script = ExtResource("2_entry")
+codex_id = &"shy"
+title = "Shy"
+category = "IC"
+extra = "Threat Level: 1"
+icon = ExtResource("1_icon")
+body_text = "Scrubs its scan data a few seconds after a full scan. Act on what you learned quickly, remember it, or scan again."

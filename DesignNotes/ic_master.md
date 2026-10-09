@@ -44,7 +44,7 @@
 Stickler: No shortcuts or aliases allowed. Player must manually type full commands, can't click to connect to signals, etc.
 - Tests memory and accuracy, potentially creates time pressure. Potentially dangerous combo with Bouncer or Faraday.
 
-Shy: After a short delay, re-hides scanned information.
+!Shy: After a short delay, re-hides scanned information.
 - Forces player to remember a signal's setup or have to act immediately while it's still in mind.
 
 Lag: Adds artificial input delay to everything you type into the terminal.
@@ -60,7 +60,7 @@ Failsafe: Signal presists for X seconds after being disabled.
 Backdoor: Can only connect to signal by running ACCESS from another signal. (Maybe needs special command or flag? Possibly can chain through multiple signals?)
 - Delays access, diverts attention.
 
-Tripwire: Triggers heat spike if disabled.
+!Tripwire: Triggers heat spike if disabled.
 - Punishes carelessness and bad scouting.
 
 Trace: Starts a timer as soon as you connect; causes a massive heat spike if you don't disconnect before the time runs out. - (More dangerous bouncer)
@@ -248,7 +248,7 @@ I'll start with new general IC concepts, then get into corp-specific variants wh
 
 ## New General IC Concepts
 
-### Tether
+### !Tether
 
 **Domain:** Access / Timing
 
@@ -272,9 +272,11 @@ I'll start with new general IC concepts, then get into corp-specific variants wh
 
 ---
 
-### Heartbeat
+### !Heartbeat
 
 **Domain:** Timing
+
+*Implemented as a watchdog: on each pulse a downed node is restored and the tamper adds a little heat, so the window is "time until the next pulse".*
 
 **Behavior:** The signal periodically "pings" its network. If the signal has been disabled or tampered with when a ping occurs, an alert triggers. But between pings, the signal can be safely disabled. The player has to time their hack to land *between* heartbeats, and their runner has to pass through during the window before the next ping detects the tampering.
 
@@ -296,7 +298,7 @@ I'll start with new general IC concepts, then get into corp-specific variants wh
 
 ---
 
-### Siphon
+### !Siphon
 
 **Domain:** Timing / Punishment
 
