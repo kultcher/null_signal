@@ -721,9 +721,7 @@ func _center_dialogue_pos() -> Vector2:
 func _set_runner_cell(cell_pos: float) -> void:
 	if timeline_manager == null:
 		return
-	timeline_manager.current_cell_pos = cell_pos
-	timeline_manager.current_cell = floor(cell_pos) as int
-	timeline_manager.last_emitted_cell = timeline_manager.current_cell
+	timeline_manager.set_runner_cell(cell_pos)
 
 func _mark_signal_scanned(system_id: String) -> void:
 	var active_sig := _get_active_signal(system_id)

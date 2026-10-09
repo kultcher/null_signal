@@ -6,10 +6,41 @@ func get_run_id() -> String:
 func get_display_name() -> String:
 	return "tutorial"
 
-# Floorplan. The runner's path runs straight along lane 2; room boundaries
-# line up with the doors the path passes through.
+# Feed sections and the runner's route, in (cell, lane) waypoints.
+# Feed 1 covers the yard and security hall. At the end of the hall the route
+# turns down a service stair and the feed cuts to the service corridor, where
+# the runner hugs the top wall to slip past cam_04's sweep.
+func get_sections() -> Array[FacilitySection]:
+	return [
+		section("approach", -3.0, 17.0) \
+			.label("LOADING YARD // SECURITY HALL") \
+			.path([
+				Vector2(-3.0, 3.6),
+				Vector2(-0.8, 3.0),
+				Vector2(2.2, 2.0),
+				Vector2(16.6, 2.0),
+				Vector2(16.6, 5.6),
+			]) \
+			.build(),
+
+		section("interior", 17.0, 82.0) \
+			.label("SERVICE CORRIDOR") \
+			.path([
+				Vector2(16.0, 2.0),
+				Vector2(21.5, 2.0),
+				Vector2(22.3, 0.4),
+				Vector2(24.0, 0.4),
+				Vector2(24.7, 2.0),
+				Vector2(82.0, 2.0),
+			]) \
+			.build(),
+	]
+
+# Floorplan. Room boundaries line up with the doors the route passes
+# through; walls get doorways automatically wherever the route crosses them.
 func get_rooms() -> Array[FacilityRoom]:
 	return [
+		# --- Feed 1: approach ---
 		room("perimeter", -3.0, 6.5) \
 			.label("PERIMETER // LOADING YARD") \
 			.exterior() \
@@ -21,8 +52,32 @@ func get_rooms() -> Array[FacilityRoom]:
 		room("security_hall", 6.5, 17.0) \
 			.label("SECURITY HALL") \
 			.lanes(-0.5, 4.5) \
+			.opening("top", 11.6, 12.4) \
+			.opening("bottom", 16.2, 17.0) \
 			.prop(7.6, 9.4, -0.5, 0.35, "RECEPTION") \
 			.prop(12.6, 13.4, 3.6, 4.5, "LOCKERS") \
+			.build(),
+
+		# Decorative: offices off the top of the hall, mostly off-screen.
+		room("admin_wing", 10.4, 13.6) \
+			.label("ADMIN") \
+			.lanes(-4.0, -0.5) \
+			.opening("bottom", 11.6, 12.4) \
+			.build(),
+
+		# The corner: the route leaves the hall down this stair.
+		room("service_stair", 16.2, 17.0) \
+			.label("") \
+			.lanes(4.5, 7.5) \
+			.opening("top", 16.2, 17.0) \
+			.build(),
+
+		# --- Feed 2: interior ---
+		# Where the stair comes out, entering the corridor from the left.
+		room("stair_landing", 15.4, 17.0) \
+			.label("") \
+			.lanes(1.45, 2.55) \
+			.in_section("interior") \
 			.build(),
 
 		room("service_corridor", 17.0, 33.0) \
@@ -31,6 +86,19 @@ func get_rooms() -> Array[FacilityRoom]:
 			.opening("top", 22.0, 22.8) \
 			.opening("bottom", 26.2, 27.0) \
 			.prop(18.5, 19.5, 3.6, 4.5, "CARTS") \
+			.build(),
+
+		# Decorative side spaces off the corridor.
+		room("vent_access", 21.9, 22.9) \
+			.label("") \
+			.lanes(-3.0, -0.5) \
+			.opening("bottom", 22.0, 22.8) \
+			.build(),
+
+		room("janitorial", 25.4, 28.0) \
+			.label("JANITORIAL") \
+			.lanes(4.5, 7.5) \
+			.opening("top", 26.2, 27.0) \
 			.build(),
 
 		room("lab_access", 33.0, 40.5) \
@@ -51,6 +119,13 @@ func get_rooms() -> Array[FacilityRoom]:
 		room("exit_hall", 48.5, 59.0) \
 			.label("EXIT HALL") \
 			.lanes(-0.5, 4.5) \
+			.opening("top", 51.6, 52.6) \
+			.build(),
+
+		room("security_office", 50.6, 54.0) \
+			.label("SECURITY OFFICE") \
+			.lanes(-4.0, -0.5) \
+			.opening("bottom", 51.6, 52.6) \
 			.build(),
 
 		room("drone_bay", 59.0, 75.0) \

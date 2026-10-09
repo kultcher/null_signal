@@ -18,9 +18,11 @@ extends Node2D
 
 # MAP MODE
 # When enabled, the timeline strip is replaced by a top-down facility map.
-# Progress along the runner's path is still measured in cells, so the
-# time-to-contact model (and everything keyed on cells) is unchanged.
-# Lanes become real vertical positions inside rooms.
+# The runner follows the run's authored route (FacilityLayout); speed is
+# measured in cells of path length. current_cell_pos stays the runner's x on
+# the map, so everything keyed on cells (triggers, ranges) keeps working.
+# The map is split into feed sections: the view follows the runner, holds once
+# the section's end is on screen, and cuts to the next section.
 @export var map_mode: bool = true
 @export var map_height_px: float = 560.0
 @export var map_lane_spacing_px: float = 90.0
@@ -53,7 +55,15 @@ var _time_scale_tween: Tween
 var _view_offset_tween: Tween
 var view_offset_cells: float = 0.0
 var signal_sweep_normalized_x: float = 1.1
-var facility_layout: FacilityLayout = FacilityLayout.new()
+var facility_layout: FacilityLayout = FacilityLayout.new():
+	set = _set_facility_layout
+
+# Route state. path_progress is distance travelled along the route (cells);
+# runner_lane_pos is the runner's current lane on the map.
+var path_progress: float = 0.0
+var runner_lane_pos: float = 2.0
+var current_section_index: int = 0
+var _straight_route := FacilityLayout.new()
 
 # REGISTRATION
 @onready var signal_manager = $"../SignalManager"
@@ -63,6 +73,7 @@ var facility_layout: FacilityLayout = FacilityLayout.new()
 # SIGNALS (to update UI later)
 signal speed_changed(new_speed)
 signal layout_changed(viewport_size: Vector2)
+signal section_changed(section: FacilitySection)
 
 func _ready():
 	CommandDispatch.timeline_manager = self
@@ -70,6 +81,7 @@ func _ready():
 	get_viewport().size_changed.connect(_refresh_layout_metrics)
 	_refresh_layout_metrics()
 	signal_sweep_normalized_x = signal_sweep_start_x
+	set_runner_cell(current_cell_pos)
 
 	GlobalEvents.runners_stopped.connect(_on_runners_stopped)
 	GlobalEvents.runners_resumed.connect(_on_runners_resumed)
@@ -82,8 +94,9 @@ func _process(delta):
 	_update_signal_sweep(delta)
 	
 	var actual_speed = cells_per_second * current_speed_mult
-	current_cell_pos += actual_speed * delta
-	
+	path_progress += actual_speed * delta
+	_apply_path_progress()
+
 	current_cell = floor(current_cell_pos) as int
 	if current_cell != last_emitted_cell:
 		last_emitted_cell = current_cell
@@ -92,8 +105,17 @@ func _process(delta):
 func cells_to_pixels(cells: float) -> float:
 	return cells * cell_width_px
 
+# Cell shown at the runner's usual screen offset. In map mode this follows the
+# runner but stays inside the active section, so the view holds once the
+# section's end reaches the right edge of the screen.
 func get_view_cell_pos() -> float:
-	return current_cell_pos + view_offset_cells
+	var view_cell := current_cell_pos
+	if map_mode:
+		var section := get_current_section()
+		var view_min := section.start_cell
+		var view_max := maxf(view_min, section.end_cell - (VISIBLE_CELLS - runner_screen_offset_cells))
+		view_cell = clampf(view_cell, view_min, view_max)
+	return view_cell + view_offset_cells
 
 func set_view_offset_cells(target_offset_cells: float, duration: float = 0.0) -> void:
 	if _view_offset_tween != null and _view_offset_tween.is_valid():
@@ -135,10 +157,55 @@ func screen_x_to_cell(screen_x: float) -> float:
 	return get_view_cell_pos() + ((screen_x - runner_screen_x) / maxf(1.0, cell_width_px))
 
 func get_runner_screen_pos() -> Vector2:
-	return Vector2(
-		cells_to_pixels(runner_screen_offset_cells - view_offset_cells),
-		lane_to_y(path_lane)
-	)
+	return Vector2(cell_to_screen_x(current_cell_pos), lane_to_y(runner_lane_pos))
+
+# Area of the timeline/map, in SignalTimeline-local coordinates.
+func get_map_rect() -> Rect2:
+	return Rect2(0.0, 0.0, screen_width, get_timeline_height())
+
+# --- ROUTE / SECTIONS ---
+
+func get_route() -> FacilityLayout:
+	return facility_layout if map_mode else _straight_route
+
+func get_current_section() -> FacilitySection:
+	var sections := get_route().sections
+	return sections[clampi(current_section_index, 0, sections.size() - 1)]
+
+# Whether something spawned at `cell` belongs to the feed currently shown.
+func is_cell_in_current_section(cell: float) -> bool:
+	if not map_mode:
+		return true
+	return get_current_section().contains_cell(cell)
+
+# Place the runner at the first point on the route that reaches `cell`.
+func set_runner_cell(cell: float) -> void:
+	path_progress = get_route().progress_at_cell(cell)
+	_apply_path_progress(false)
+	current_cell = floor(current_cell_pos) as int
+	last_emitted_cell = current_cell
+
+func _apply_path_progress(emit_section_change: bool = true) -> void:
+	var route := get_route()
+	var pos := route.sample_position(path_progress)
+	current_cell_pos = pos.x
+	runner_lane_pos = pos.y
+	var section_index := route.get_section_index_for_progress(path_progress)
+	if section_index != current_section_index:
+		current_section_index = section_index
+		if emit_section_change:
+			section_changed.emit(get_current_section())
+
+func _set_facility_layout(layout: FacilityLayout) -> void:
+	facility_layout = layout if layout != null else FacilityLayout.new()
+	_sync_route_scale()
+
+func _sync_route_scale() -> void:
+	if cell_width_px <= 0.0:
+		return
+	var scale := lane_height / cell_width_px
+	facility_layout.set_lane_to_cell_scale(scale)
+	_straight_route.set_lane_to_cell_scale(scale)
 
 func get_viewport_size() -> Vector2:
 	return Vector2(screen_width, screen_height)
@@ -159,6 +226,7 @@ func _refresh_layout_metrics() -> void:
 		var timeline_height := clampf(screen_height * timeline_height_ratio, min_timeline_height_px, max_timeline_height_px)
 		lane_height = timeline_height / LANES
 		lane_origin_y = 0.0
+	_sync_route_scale()
 	layout_changed.emit(viewport_size)
 
 func _update_signal_sweep(delta: float) -> void:

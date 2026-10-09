@@ -18,6 +18,7 @@ var CELL_GRID_COLOR = Color(0.275, 0.699, 0.771, 0.2)
 
 
 var time_elapsed: float = 0.0
+const RUNNER_EDGE_FADE_PX := 40.0
 
 # Full-width backdrop/overlay rects that should cover the whole map area.
 @onready var _backdrop_rects: Array[Control] = [
@@ -60,7 +61,15 @@ func _process(delta):
 func _update_runner_team_position() -> void:
 	if runner_team == null:
 		return
-	runner_team.position = timeline_manager.get_runner_screen_pos()
+	var pos: Vector2 = timeline_manager.get_runner_screen_pos()
+	runner_team.position = pos
+	if timeline_manager.map_mode:
+		# Fade the runner out as the route leaves the map (e.g. around a corner).
+		var rect: Rect2 = timeline_manager.get_map_rect()
+		var edge_dist := minf(minf(pos.y - rect.position.y, rect.end.y - pos.y), minf(pos.x - rect.position.x, rect.end.x - pos.x))
+		runner_team.modulate.a = clampf(edge_dist / RUNNER_EDGE_FADE_PX, 0.0, 1.0)
+	else:
+		runner_team.modulate.a = 1.0
 
 func _draw():
 	cell_width = timeline_manager.cell_width_px

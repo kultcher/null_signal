@@ -32,6 +32,7 @@
 [ext_resource type="Texture2D" uid="uid://ds0t2yw52cuja" path="res://Visuals/glitch_screen.png" id="27_pcbq1"]
 [ext_resource type="PackedScene" uid="uid://d1v33qnlb8cd7" path="res://terminal_gfx_test.tscn" id="30_pcbq1"]
 [ext_resource type="Script" path="res://Scripts/Facility/facility_map_layer.gd" id="31_fmap"]
+[ext_resource type="Script" path="res://Scripts/Facility/feed_switch_overlay.gd" id="32_feed"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_pcbq1"]
 shader = ExtResource("8_ojo04")
@@ -260,6 +261,9 @@ script = ExtResource("4_jx6wh")
 
 [node name="ScanController" type="Node2D" parent="SignalTimeline" unique_id=2064755917]
 script = ExtResource("7_k8c5c")
+
+[node name="FeedSwitchOverlay" type="Node2D" parent="SignalTimeline"]
+script = ExtResource("32_feed")
 
 [node name="EscalationPanel" type="PanelContainer" parent="SignalTimeline" unique_id=95600055]
 offset_left = 820.0

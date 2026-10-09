@@ -94,7 +94,9 @@ func update_signal_position():
 			signal_lane = active_sig.runtime_lane_pos
 
 		var visual_x: float = timeline_manager.cell_to_screen_x(signal_cell_index)
-		var is_on_screen = visual_x > -200 and visual_x < timeline_manager.screen_width + 200
+		# Signals only exist on the feed of the section they were placed in.
+		var in_section: bool = timeline_manager.is_cell_in_current_section(active_sig.start_cell_index)
+		var is_on_screen = in_section and visual_x > -200 and visual_x < timeline_manager.screen_width + 200
 		
 		if is_on_screen:
 			if active_sig.instance_node == null:
@@ -115,7 +117,7 @@ func update_signal_position():
 			active_sig.instance_node.position = Vector2(visual_x, visual_y) + render_offset
 			
 		else:
-			if visual_x < -200 and active_sig.instance_node != null:
+			if (visual_x < -200 or not in_section) and active_sig.instance_node != null:
 				if terminal_window != null:
 					terminal_window.hide_tab_for_signal(active_sig)
 				if scan_controller != null:

@@ -16,6 +16,10 @@ var end_cell: float = 0.0
 var lane_top: float = -0.5
 var lane_bottom: float = 4.5
 
+# Which feed section draws this room. Empty = the section containing the
+# room's midpoint (assigned by FacilityLayout).
+var section_id: String = ""
+
 # Gaps in the top/bottom walls, as {"side": "top"/"bottom", "from_cell": f, "to_cell": f}.
 var wall_openings: Array[Dictionary] = []
 

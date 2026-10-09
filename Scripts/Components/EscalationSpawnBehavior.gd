@@ -62,6 +62,9 @@ func _spawn_drone_toward_runner(active_sig: ActiveSignal, _component: Escalation
 	_spawn_count += 1
 	var spawn_lane := 2
 	var spawn_cell = timeline_manager.current_cell_pos + 8.0
+	if timeline_manager.map_mode:
+		# Stay on the current feed; anything past the section end would be hidden.
+		spawn_cell = minf(spawn_cell, timeline_manager.get_current_section().end_cell - 0.5)
 	var target_cell = timeline_manager.current_cell_pos
 	var facing_deg := 0.0 if target_cell <= spawn_cell else 180.0
 

@@ -159,8 +159,35 @@ class RoomBuilder extends RefCounted:
 		})
 		return self
 
+	# Draw this room in a specific feed section (e.g. a decorative stub that
+	# overlaps a neighbouring section's cell range).
+	func in_section(section_id: String) -> RoomBuilder:
+		_room.section_id = section_id
+		return self
+
 	func build() -> FacilityRoom:
 		return _room
+
+class SectionBuilder extends RefCounted:
+	var _section := FacilitySection.new()
+
+	func _init(section_id: String, start_cell: float, end_cell: float) -> void:
+		_section.id = section_id
+		_section.label = section_id.to_upper().replace("_", " ")
+		_section.start_cell = start_cell
+		_section.end_cell = end_cell
+
+	func label(text: String) -> SectionBuilder:
+		_section.label = text
+		return self
+
+	# Runner route through the section as (cell, lane) waypoints.
+	func path(points: Array[Vector2]) -> SectionBuilder:
+		_section.path_points = PackedVector2Array(points)
+		return self
+
+	func build() -> FacilitySection:
+		return _section
 
 const BASIC_CAMERA := preload("res://Resources/SignalPrefabs/basic_camera.tres")
 const BASIC_DRONE := preload("res://Resources/SignalPrefabs/basic_drone.tres")
@@ -189,8 +216,16 @@ func get_rooms() -> Array[FacilityRoom]:
 func room(room_id: String, start_cell: float, end_cell: float) -> RoomBuilder:
 	return RoomBuilder.new(room_id, start_cell, end_cell)
 
+# Feed sections and the runner's route. Runs without sections get one
+# section with a straight route along lane 2.
+func get_sections() -> Array[FacilitySection]:
+	return []
+
+func section(section_id: String, start_cell: float, end_cell: float) -> SectionBuilder:
+	return SectionBuilder.new(section_id, start_cell, end_cell)
+
 func build_facility_layout() -> FacilityLayout:
-	return FacilityLayout.new(get_rooms())
+	return FacilityLayout.new(get_rooms(), get_sections())
 
 func spawn(signal_data: SignalData, cell_index: float) -> SpawnBuilder:
 	return SpawnBuilder.new(self, signal_data, cell_index)
