@@ -10,7 +10,9 @@
 class_name FacilityLayout extends RefCounted
 
 const DEFAULT_PATH_LANE := 2.0
-const DEFAULT_EXTENT := 100000.0
+# Half-length of the default straight route. Kept modest so positions along
+# it stay precise.
+const DEFAULT_EXTENT := 10000.0
 
 var rooms: Array[FacilityRoom] = []
 var sections: Array[FacilitySection] = []
@@ -163,7 +165,11 @@ func _sample_section(section: FacilitySection, local_progress: float) -> Vector2
 		if remaining <= seg_len or i == points.size() - 2:
 			if seg_len <= 0.0:
 				return b
-			return a.lerp(b, clampf(remaining / seg_len, 0.0, 1.0))
+			# Interpolate in 64-bit floats: Vector2 is 32-bit, and on long
+			# segments (e.g. the default straight route) Vector2.lerp rounds the
+			# position to coarse steps, so the runner moves in visible jerks.
+			var t := clampf(remaining / seg_len, 0.0, 1.0)
+			return Vector2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 		remaining -= seg_len
 	return points[points.size() - 1]
 
