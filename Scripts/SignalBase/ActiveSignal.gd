@@ -100,6 +100,13 @@ func generate_scan_layers():
 	build_puzzle_layer()
 	build_ic_layer()
 
+# Forget everything scanned so far (used by Shy IC).
+func reset_scan_progress() -> void:
+	for layer in scan_layers:
+		layer.revealed = false
+	current_scan_index = 0
+	current_layer_progress = 0.0
+
 func set_door_locked(locked: bool) -> void:
 	if data == null or data.type != SignalData.Type.DOOR:
 		return

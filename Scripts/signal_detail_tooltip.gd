@@ -23,8 +23,11 @@ const COLOR_LOCK_LOCKED := Color("ff0000ff")
 const COLOR_LOCK_HACKED := Color("0096faff")
 
 var _body_fade_tween: Tween = null
+var _default_icon_states: Dictionary = {}
 
 func _ready() -> void:
+	for icon in [tt_scan_icon, tt_lock_icon, tt_ic_icon]:
+		_default_icon_states[icon] = [icon.texture, icon.self_modulate]
 	tt_body_box.resized.connect(_queue_realign_body)
 	tt_body.resized.connect(_queue_realign_body)
 	tooltip_hbox.resized.connect(_queue_realign_body)
@@ -89,6 +92,13 @@ func get_lock_state_focus_rect() -> Rect2:
 	return tt_lock_state.get_global_rect()
 
 enum IconState { UNKNOWN_SCAN, UNKNOWN_LOCK, SCANNING, PARTIAL, COMPLETE, OPEN, LOCKED, HACKED, NO_IC, ACTIVE_IC }
+
+# Back to the unscanned look (used when IC wipes revealed scan data).
+func reset_panels() -> void:
+	for icon in _default_icon_states:
+		var state: Array = _default_icon_states[icon]
+		icon.texture = state[0]
+		icon.self_modulate = state[1]
 
 func set_panel_state(icon: Control, type):
 #	var base_style = panel.get_theme_stylebox("panel")

@@ -211,6 +211,16 @@ func initialize_tooltip():
 	for description in my_active_sig.get_revealed_scan_descriptions():
 		append_tooltip(description)
 
+# Rebuild the tooltip from the signal's current scan state (e.g. after IC
+# wiped what had been revealed).
+func rebuild_tooltip() -> void:
+	tooltip_main.tt_body.text = ""
+	tooltip_main.reset_panels()
+	initialize_tooltip()
+	refresh_status_panels()
+	_sync_tooltip_body_visibility()
+	_sync_ic_effects_visibility()
+
 func append_tooltip(info: String):
 	tooltip_main.tt_body.text += info + "\n"
 

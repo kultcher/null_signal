@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CodexEntry" format=3]
+
+[ext_resource type="Texture2D" path="res://Visuals/Icons/Simple/strongbox.svg" id="1_icon"]
+[ext_resource type="Script" uid="uid://bcwfqttb2lhqa" path="res://Scripts/codex_entry.gd" id="2_entry"]
+
+[resource]
+script = ExtResource("2_entry")
+codex_id = &"siphon"
+title = "Siphon"
+category = "IC"
+extra = "Threat Level: 2"
+icon = ExtResource("1_icon")
+body_text = "Bleeds heat every second a session to this signal stays open. There's no hard timer, but slow work gets expensive."

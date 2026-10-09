@@ -23,6 +23,12 @@ class SpawnBuilder extends RefCounted:
 		_spawn["spoof_id"] = value
 		return self
 
+	# Wireframe drawn on the map under the signal (see WireframeModels).
+	# Without this, a model is picked from the signal's id where one fits.
+	func model(model_name: StringName) -> SpawnBuilder:
+		_spawn["map_model"] = model_name
+		return self
+
 	func lane(value: int) -> SpawnBuilder:
 		_spawn["lane"] = value
 		return self
@@ -122,6 +128,76 @@ class SpawnBuilder extends RefCounted:
 		_spawn["ic_modules"] = ic
 		return ic
 
+class RoomBuilder extends RefCounted:
+	var _room := FacilityRoom.new()
+
+	func _init(room_id: String, start_cell: float, end_cell: float) -> void:
+		_room.id = room_id
+		_room.label = room_id.to_upper().replace("_", " ")
+		_room.start_cell = start_cell
+		_room.end_cell = end_cell
+
+	func label(text: String) -> RoomBuilder:
+		_room.label = text
+		return self
+
+	# Vertical extent in lanes. Edges usually sit half a lane outside the
+	# outermost lane used by signals, e.g. lanes(-0.5, 4.5) for a full-width room.
+	func lanes(top: float, bottom: float) -> RoomBuilder:
+		_room.lane_top = top
+		_room.lane_bottom = bottom
+		return self
+
+	func exterior() -> RoomBuilder:
+		_room.kind = FacilityRoom.Kind.EXTERIOR
+		return self
+
+	# A gap in the top or bottom wall (side corridor, vent, loading bay...).
+	func opening(side: String, from_cell: float, to_cell: float) -> RoomBuilder:
+		_room.wall_openings.append({"side": side, "from_cell": from_cell, "to_cell": to_cell})
+		return self
+
+	# Visual-only furniture. Rect is in cells (x) and lanes (y).
+	# Optional `model` names a WireframeModels entry drawn fitted to the rect;
+	# without one the prop is a flat floor marking.
+	func prop(from_cell: float, to_cell: float, lane_top: float, lane_bottom: float, prop_label: String = "", model: StringName = &"") -> RoomBuilder:
+		_room.props.append({
+			"rect": Rect2(from_cell, lane_top, to_cell - from_cell, lane_bottom - lane_top),
+			"label": prop_label,
+			"model": model,
+		})
+		return self
+
+	# Draw this room in a specific feed section (e.g. a decorative stub that
+	# overlaps a neighbouring section's cell range).
+	func in_section(section_id: String) -> RoomBuilder:
+		_room.section_id = section_id
+		return self
+
+	func build() -> FacilityRoom:
+		return _room
+
+class SectionBuilder extends RefCounted:
+	var _section := FacilitySection.new()
+
+	func _init(section_id: String, start_cell: float, end_cell: float) -> void:
+		_section.id = section_id
+		_section.label = section_id.to_upper().replace("_", " ")
+		_section.start_cell = start_cell
+		_section.end_cell = end_cell
+
+	func label(text: String) -> SectionBuilder:
+		_section.label = text
+		return self
+
+	# Runner route through the section as (cell, lane) waypoints.
+	func path(points: Array[Vector2]) -> SectionBuilder:
+		_section.path_points = PackedVector2Array(points)
+		return self
+
+	func build() -> FacilitySection:
+		return _section
+
 const BASIC_CAMERA := preload("res://Resources/SignalPrefabs/basic_camera.tres")
 const BASIC_DRONE := preload("res://Resources/SignalPrefabs/basic_drone.tres")
 const BASIC_DOOR := preload("res://Resources/SignalPrefabs/basic_door.tres")
@@ -140,6 +216,30 @@ func get_display_name() -> String:
 
 func get_spawns() -> Array[Dictionary]:
 	return []
+
+# Whether heat thresholds spawn escalation signals and raise difficulty.
+# Heat still accumulates either way.
+func is_escalation_enabled() -> bool:
+	return true
+
+# Rooms the runner's path passes through. Runs without rooms fall back to
+# the plain lane grid.
+func get_rooms() -> Array[FacilityRoom]:
+	return []
+
+func room(room_id: String, start_cell: float, end_cell: float) -> RoomBuilder:
+	return RoomBuilder.new(room_id, start_cell, end_cell)
+
+# Feed sections and the runner's route. Runs without sections get one
+# section with a straight route along lane 2.
+func get_sections() -> Array[FacilitySection]:
+	return []
+
+func section(section_id: String, start_cell: float, end_cell: float) -> SectionBuilder:
+	return SectionBuilder.new(section_id, start_cell, end_cell)
+
+func build_facility_layout() -> FacilityLayout:
+	return FacilityLayout.new(get_rooms(), get_sections())
 
 func spawn(signal_data: SignalData, cell_index: float) -> SpawnBuilder:
 	return SpawnBuilder.new(self, signal_data, cell_index)
@@ -174,6 +274,8 @@ func build_runtime_signal(spawn: Dictionary) -> SignalData:
 		_override_patrol_points(runtime_signal, spawn, spawn["patrol_points"])
 	if spawn.has("disruptor"):
 		runtime_signal.disruptor = spawn["disruptor"].duplicate(true)
+	if spawn.has("map_model"):
+		runtime_signal.map_model = spawn["map_model"]
 
 	return runtime_signal
 
@@ -379,6 +481,11 @@ func _create_ic_module(name: String) -> ICModule:
 		"haze": func() -> ICModule: return HazeModule.new(),
 		"callback": func() -> ICModule: return CallbackModule.new(),
 		"trace": func() -> ICModule: return TraceModule.new(),
+		"tripwire": func() -> ICModule: return TripwireModule.new(),
+		"siphon": func() -> ICModule: return SiphonModule.new(),
+		"heartbeat": func() -> ICModule: return HeartbeatModule.new(),
+		"tether": func() -> ICModule: return TetherModule.new(),
+		"shy": func() -> ICModule: return ShyModule.new(),
 	}
 	var factory = factory_map.get(name, null)
 	if factory == null:

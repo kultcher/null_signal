@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CodexEntry" format=3]
+
+[ext_resource type="Texture2D" path="res://Visuals/Icons/Simple/spikes-half.svg" id="1_icon"]
+[ext_resource type="Script" uid="uid://bcwfqttb2lhqa" path="res://Scripts/codex_entry.gd" id="2_entry"]
+
+[resource]
+script = ExtResource("2_entry")
+codex_id = &"tripwire"
+title = "Tripwire"
+category = "IC"
+extra = "Threat Level: 2"
+icon = ExtResource("1_icon")
+body_text = "Raises a heat spike when you shut the signal down. Scan before you KILL: slipping past or distracting is usually cheaper."
