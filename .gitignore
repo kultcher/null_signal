@@ -5,5 +5,7 @@
 /DesignNotes/BrainstormResults/
 /DesignNotes/BrainstormWorking
 /codex/AGENTS.md
-/visuals/
+/Release/
+/Audio/music/
+*.kra
 *.exe
