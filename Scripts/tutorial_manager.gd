@@ -25,6 +25,9 @@ signal wait_completed(result: String)
 func _ready():
 	GlobalEvents.reset_tutorial_features()
 	window_manager.clear_tutorial_objective()
+	if run_manager.debug_free_play:
+		_set_cutscene_black_screen(false)
+		return
 	if run_manager.get_run_id() == "tutorial":
 		GlobalEvents.first_null_spike = true
 		_set_cutscene_black_screen(true)

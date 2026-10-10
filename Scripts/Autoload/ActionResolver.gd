@@ -11,6 +11,10 @@ const DEBUG_PREFIX := "[ActionResolver]"
 # Per-action trace output. Noisy; flip off when not debugging the pipeline.
 var debug_logging := true
 
+func reset_run_state() -> void:
+	_pending_actions.clear()
+	_is_processing_actions = false
+
 func build_scan_action(target_signal: ActiveSignal) -> ActionContext:
 	var action := ActionContext.create_system_action(
 		ActionContext.ActionType.START_SCAN_SIGNAL,

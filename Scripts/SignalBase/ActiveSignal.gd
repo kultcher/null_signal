@@ -56,6 +56,21 @@ var runtime_detection_facing_deg: float = 180.0
 var runtime_detection_paused: bool = false
 var runtime_render_offset: Vector2 = Vector2.ZERO
 
+func release_run_state() -> void:
+	# Resources and timers can outlive their scene. Stop them before a new
+	# run registers with the autoloads, and break the session reference cycle.
+	is_disabled = true
+	if data != null:
+		if data.response != null:
+			data.response.reset_delay_state(self)
+		if data.ic_modules != null:
+			data.ic_modules.notify_disabled(self)
+		if data.escalation != null:
+			data.escalation.stop(self)
+	if terminal_session != null:
+		terminal_session.active_signal = null
+		terminal_session = null
+
 func setup():
 	# Assign name based on possible obfuscations
 	if data.spoof_id != "":

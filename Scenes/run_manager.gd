@@ -10,18 +10,37 @@ extends Node
 
 var current_run: RunDefinition
 
+# Supplied by the debug restart coordinator before this scene enters the tree.
+var definition_override: RunDefinition
+var debug_start_location: Dictionary = {}
+var debug_free_play := false
+
 func _ready():
 	start_run()
+	if not debug_start_location.is_empty():
+		# Wait for TimelineManager's layout metrics and every sibling's _ready,
+		# but place the runner before the first gameplay process frame.
+		get_parent().ready.connect(_apply_debug_start, CONNECT_ONE_SHOT)
 
 func _process(delta: float):
 	pass
 
 func start_run():
-	var level_script = load(level_script_path)
-	current_run = level_script.new()
+	if definition_override != null:
+		current_run = definition_override.get_script().new()
+	else:
+		var level_script = load(level_script_path)
+		current_run = level_script.new()
 	if timeline_manager != null:
 		timeline_manager.facility_layout = current_run.build_facility_layout()
 	propagate()
+
+func _apply_debug_start() -> void:
+	timeline_manager.path_progress = timeline_manager.facility_layout.progress_from_location(debug_start_location)
+	timeline_manager._apply_path_progress(false)
+	timeline_manager.current_cell = floori(timeline_manager.current_cell_pos)
+	timeline_manager.last_emitted_cell = timeline_manager.current_cell
+	signal_manager.update_signal_position()
 
 func propagate():
 	for spawn in current_run.get_spawns():

@@ -96,6 +96,10 @@ func _ready():
 	_refresh_prefix()
 	_refresh_signal_detail_panel()
 
+func _exit_tree() -> void:
+	if root_signal != null:
+		root_signal.release_run_state()
+
 func _process(_delta: float) -> void:
 	if active_signal != null and active_signal != root_signal:
 		_refresh_signal_detail_panel()

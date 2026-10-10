@@ -100,6 +100,13 @@ layout_mode = 2
 focus_mode = 0
 text = "Reload [R]"
 
+[node name="Restart" type="Button" parent="Panel/Header/Controls"]
+layout_mode = 2
+focus_mode = 0
+disabled = true
+text = "Restart here"
+tooltip_text = "Alt-click the map to choose a point on the route. Starts a fresh run there, with tutorial sequences bypassed."
+
 [node name="Close" type="Button" parent="Panel/Header/Controls"]
 layout_mode = 2
 focus_mode = 0
@@ -144,6 +151,13 @@ layout_mode = 2
 focus_mode = 0
 button_pressed = true
 text = "Signal labels"
+
+[node name="Security" type="CheckButton" parent="Panel/Header/Overlays"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Security"
+tooltip_text = "Initial puzzle/door locks (amber) and configured IC (violet)."
 
 [node name="MapView" type="Control" parent="Panel"]
 clip_contents = true
@@ -226,4 +240,4 @@ offset_top = -36.0
 offset_right = 1850.0
 offset_bottom = -13.0
 theme_override_font_sizes/font_size = 16
-text = "Middle-drag: pan | Wheel: zoom at cursor | Click: inspect | Shift-click: ruler A/B | Delete: clear ruler | PgUp/PgDn: sections | Esc: close"
+text = "Middle-drag: pan | Wheel: zoom | Click: inspect | Shift-click: ruler | Alt-click: start point | Amber: lock | Violet: IC | PgUp/PgDn: sections | Esc: close"

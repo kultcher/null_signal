@@ -9,6 +9,12 @@ var terminal_window: Control = null
 
 var window_manager: CanvasLayer = null
 
+func clear_run_references() -> void:
+	timeline_manager = null
+	signal_manager = null
+	terminal_window = null
+	window_manager = null
+
 # === SIGNALS ===
 signal set_terminal_signal(active_sig: ActiveSignal)
 signal command_complete(cmd_context: CommandContext)

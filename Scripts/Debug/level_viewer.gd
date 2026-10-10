@@ -6,6 +6,7 @@ const BASE_CELL_PX := 240.0
 const BASE_LANE_PX := 90.0
 const MIN_ZOOM := 0.025
 const MAX_ZOOM := 4.0
+const DebugRestart = preload("res://Scripts/Debug/debug_run_restart.gd")
 
 @onready var panel: Control = $Panel
 @onready var map_view: Control = $Panel/MapView
@@ -22,6 +23,8 @@ const MAX_ZOOM := 4.0
 @onready var patrol_toggle: CheckButton = $Panel/Header/Overlays/Patrols
 @onready var boundary_toggle: CheckButton = $Panel/Header/Overlays/Boundaries
 @onready var labels_toggle: CheckButton = $Panel/Header/Overlays/Labels
+@onready var security_toggle: CheckButton = $Panel/Header/Overlays/Security
+@onready var restart_button: Button = $Panel/Header/Controls/Restart
 
 var facility_layout: FacilityLayout
 var entries: Array[Dictionary] = []
@@ -36,6 +39,8 @@ var _previous_pause := false
 var _dragging := false
 var _run_paths: Array[String] = []
 var _runner_position := Vector2.ZERO
+var start_location: Dictionary = {}
+var start_position := Vector2.ZERO
 
 # Projection interface used by the shared facility renderer.
 var map_mode := true
@@ -58,7 +63,8 @@ func _ready() -> void:
 	$Panel/Header/Controls/FitLevel.pressed.connect(fit_level)
 	$Panel/Header/Controls/Reload.pressed.connect(reload_preview)
 	$Panel/Header/Controls/Close.pressed.connect(close_viewer)
-	for toggle in [distance_toggle, route_toggle, vision_toggle, patrol_toggle, boundary_toggle, labels_toggle]:
+	restart_button.pressed.connect(restart_here)
+	for toggle in [distance_toggle, route_toggle, vision_toggle, patrol_toggle, boundary_toggle, labels_toggle, security_toggle]:
 		toggle.toggled.connect(func(_value: bool): _redraw())
 
 func _input(event: InputEvent) -> void:
@@ -104,7 +110,8 @@ func _input(event: InputEvent) -> void:
 				if event.pressed: zoom_at(local, 1.0 / 1.2)
 			MOUSE_BUTTON_LEFT:
 				if event.pressed:
-					if event.shift_pressed: measure_screen_point(local)
+					if event.alt_pressed: choose_start_point(screen_to_map(local))
+					elif event.shift_pressed: measure_screen_point(local)
 					else: select_at(local)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
@@ -124,8 +131,13 @@ func open_viewer() -> void:
 	var run_manager = get_parent().get_node("RunManager")
 	var timeline = get_parent().get_node("SignalTimeline/TimelineManager")
 	_runner_position = Vector2(timeline.current_cell_pos, timeline.runner_lane_pos)
-	_populate_runs(run_manager.current_run.get_script().resource_path)
-	if load_preview(run_manager.current_run.get_script().resource_path):
+	var path: String = run_manager.current_run.get_script().resource_path
+	if path.is_empty():
+		path = run_manager.level_script_path
+	if path.begins_with("uid://"):
+		path = ResourceUID.get_id_path(ResourceUID.text_to_id(path))
+	_populate_runs(path)
+	if load_preview(path):
 		section_index = clampi(timeline.current_section_index, 0, facility_layout.sections.size() - 1)
 		_sync_sections()
 		fit_section()
@@ -185,6 +197,9 @@ func load_preview(path: String) -> bool:
 			status.text = "Invalid spawn data. Previous preview retained."
 			return false
 		var data := run.build_runtime_signal(spawn)
+		if data.puzzle != null:
+			# Match ActiveSignal.setup(), without invoking IC or gameplay hooks.
+			data.puzzle.ensure_initial_lock_state()
 		var cell := float(spawn["cell_index"])
 		next_entries.append({"data": data, "cell": cell, "section": layout.get_section_for_cell(cell).id})
 	# Copy the gameplay metric once. Preview zoom never changes route length.
@@ -210,6 +225,7 @@ func load_preview(path: String) -> bool:
 			if layout.sections[i].id == old_section_id:
 				section_index = i
 	_sync_sections()
+	_sync_start_point()
 	_update_inspector()
 	status.text = "%s | %d signals | %d sections | Authored preview; gameplay frozen. Reload updates this preview only." % [run.get_display_name(), entries.size(), layout.sections.size()]
 	_redraw()
@@ -221,6 +237,8 @@ func reload_preview() -> void:
 func _select_run(index: int) -> void:
 	if load_preview(_run_paths[index]):
 		measurement.clear()
+		start_location.clear()
+		restart_button.disabled = true
 		selected_index = -1
 		fit_level()
 		_update_inspector()
@@ -380,11 +398,12 @@ func measurement_text() -> String:
 
 func _update_inspector() -> void:
 	if selected_index < 0:
-		inspector.text = "SIGNAL INSPECTOR\n\nClick a signal to inspect its authored placement.\n\nDistance grid: X = cells, Y = lanes.\n\nShift-click A and B to measure. Direct distance converts lanes using the gameplay metric; it is not route distance.\n\nDelete clears the ruler.\n\nPreview changes take effect in gameplay on the next run restart."
+		inspector.text = "SIGNAL INSPECTOR\n\nClick a signal to inspect its authored placement and security.\n\nDistance grid: X = cells, Y = lanes.\n\nShift-click A and B to measure. Direct distance converts lanes using the gameplay metric; it is not route distance.\n\nDelete clears the ruler.\n\nAlt-click to choose a route point, then Restart here to play a fresh run there. The tutorial sequence is bypassed."
 		return
 	var entry := entries[selected_index]
 	var data: SignalData = entry["data"]
 	var text := "%s\n%s\n\nCell: %.2f\nLane: %d\nSection: %s\nFacing: %.1f deg\nHorizontal dx from frozen runner: %.2f cells" % [data.system_id, SignalData.Type.keys()[data.type], entry["cell"], data.lane, entry["section"], data.facing_deg, entry["cell"] - _runner_position.x]
+	text += security_details(data)
 	if data.detection != null:
 		var d := data.detection
 		text += "\n\nVISION\nLength: %.2f cells\nAngle: %.1f deg\nWatch offset: %.2f cells\nShape: %s" % [d.vision_length_cells, d.vision_angle_deg, d.watch_offset_cells, DetectionComponent.ShapeType.keys()[d.shape_type]]
@@ -394,11 +413,100 @@ func _update_inspector() -> void:
 		text += "\n\nPATROL\nSpeed: %.2f cells/s\nMode: %s" % [data.mobility.move_speed_cells_per_sec, MobilityComponent.PatrolMode.keys()[data.mobility.patrol_mode]]
 		for point in data.mobility.patrol_points:
 			text += "\n(%.2f, %d) dwell %.1fs" % [point.cell_x, point.lane, point.dwell_sec]
-	if data.ic_modules != null and not data.ic_modules.modules.is_empty():
-		text += "\n\nIC"
-		for module in data.ic_modules.modules:
-			text += "\n" + module.get_script().resource_path.get_file().get_basename()
 	inspector.text = text
+
+# Initial authored security; no scan gating and no live-run state mutation.
+func security_summary(data: SignalData) -> String:
+	var parts: Array[String] = []
+	if data.puzzle != null and data.puzzle.puzzle_type != PuzzleComponent.Type.NONE:
+		parts.append("%s D%d %s" % [PuzzleComponent.Type.keys()[data.puzzle.puzzle_type], data.puzzle.difficulty, "LOCKED" if data.puzzle.is_locked() else "OPEN"])
+	elif data.type == SignalData.Type.DOOR:
+		parts.append("DOOR %s" % ["LOCKED" if data.door_locked else "OPEN"])
+	if data.ic_modules != null and not data.ic_modules.modules.is_empty():
+		parts.append("IC %d" % data.ic_modules.modules.size())
+	return " | ".join(parts)
+
+func security_details(data: SignalData) -> String:
+	var text := "\n\nSECURITY // INITIAL STATE"
+	if data.type == SignalData.Type.DOOR:
+		text += "\nDoor: %s" % ["Locked" if data.door_locked else "Open"]
+	if data.puzzle == null or data.puzzle.puzzle_type == PuzzleComponent.Type.NONE:
+		text += "\nPuzzle: None"
+	else:
+		var puzzle := data.puzzle
+		text += "\nPuzzle: %s\nStatus: %s\nDifficulty: %d (%s)" % [PuzzleComponent.Type.keys()[puzzle.puzzle_type], "Locked" if puzzle.is_locked() else "Open", puzzle.difficulty, "scales with escalation" if puzzle.uses_escalation_difficulty else "fixed"]
+		var sniff := puzzle.get_sniff_config()
+		var decrypt := puzzle.get_decrypt_config()
+		if sniff != null:
+			text += "\nGrid: %d x %d\nTargets: %d\nScroll speed: %.1f" % [sniff.grid_cols, sniff.grid_rows, sniff.target_count, sniff.base_speed]
+		elif decrypt != null:
+			text += "\nCipher: %s\nKeyspace: %d..%d" % [DecryptPuzzleConfig.Cipher.keys()[decrypt.cipher], decrypt.keyspace_min, decrypt.keyspace_max]
+	if data.ic_modules == null or data.ic_modules.modules.is_empty():
+		return text + "\nIC: None"
+	text += "\n\nIC // CONFIGURED"
+	for resource in data.ic_modules.modules:
+		var module := resource as ICModule
+		if module == null:
+			continue
+		text += "\n%s\nDifficulty: %d (%s)" % [module.get_desc(), module.base_difficulty, "scales with escalation" if module.uses_escalation_difficulty else "custom / fixed"]
+		for property in module.get_property_list():
+			var key := String(property["name"])
+			if (int(property["usage"]) & PROPERTY_USAGE_EDITOR) == 0 or key.begins_with("_") or key in ["resource_local_to_scene", "resource_name", "resource_path", "script", "codex_id", "warning_msg"]:
+				continue
+			var value = module.get(key)
+			if value is float or value is int or value is bool or value is String:
+				text += "\n%s: %s" % [key.capitalize(), str(value)]
+	return text
+
+# Project onto the nearest route segment in the visible sections. Section
+# identity matters at relay boundaries where rooms can overlap cell ranges.
+func choose_start_point(point: Vector2) -> void:
+	if facility_layout == null:
+		return
+	var metric := Vector2(point.x, point.y * facility_layout.lane_to_cell_scale)
+	var best := INF
+	for section in visible_sections():
+		for i in range(section.path_points.size() - 1):
+			var a := section.path_points[i]
+			var b := section.path_points[i + 1]
+			var am := Vector2(a.x, a.y * facility_layout.lane_to_cell_scale)
+			var bm := Vector2(b.x, b.y * facility_layout.lane_to_cell_scale)
+			var closest := Geometry2D.get_closest_point_to_segment(metric, am, bm)
+			var distance := closest.distance_squared_to(metric)
+			if distance < best:
+				best = distance
+				var length := am.distance_squared_to(bm)
+				var t := 0.0 if length <= 0.0 else (closest - am).dot(bm - am) / length
+				start_location = {"section_id": section.id, "section": facility_layout.sections.find(section), "segment": i, "t": clampf(t, 0.0, 1.0)}
+	_sync_start_point()
+	_redraw()
+
+func _sync_start_point() -> void:
+	restart_button.disabled = true
+	if start_location.is_empty():
+		return
+	for i in facility_layout.sections.size():
+		var section := facility_layout.sections[i]
+		if section.id != start_location["section_id"] or section.path_points.size() < 2:
+			continue
+		start_location["section"] = i
+		var segment := clampi(start_location["segment"], 0, section.path_points.size() - 2)
+		start_location["segment"] = segment
+		start_position = section.path_points[segment].lerp(section.path_points[segment + 1], start_location["t"])
+		restart_button.disabled = false
+		coordinates.text = "START HERE  %s | cell %.2f | lane %.2f | path %.2f cells. Restart here creates a fresh, playable run." % [section.label, start_position.x, start_position.y, facility_layout.progress_from_location(start_location)]
+		return
+	start_location.clear()
+
+func restart_here() -> bool:
+	if start_location.is_empty() or preview_run == null:
+		return false
+	if DebugRestart.request(get_parent(), preview_run, script_path, start_location):
+		restart_button.disabled = true
+		status.text = "Restarting a fresh run at the selected route point..."
+		return true
+	status.text = "Restart failed: the run scene could not be loaded. Preview retained."
+	return false
 
 func _redraw() -> void:
 	if not is_node_ready() or facility_layout == null:

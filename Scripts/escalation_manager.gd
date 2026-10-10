@@ -38,6 +38,10 @@ func _ready() -> void:
 	_refresh_anchor_layout()
 	_refresh_panel()
 
+func _exit_tree() -> void:
+	for active_sig in _active_escalation_signals.values():
+		active_sig.release_run_state()
+
 func get_active_tier_index() -> int:
 	return _active_tier_index
 
@@ -152,6 +156,8 @@ func _spawn_escalation_signal_for_tier(tier_index: int) -> void:
 	_refresh_signal_layout()
 
 func _on_escalation_signal_tree_exited(tier_index: int) -> void:
+	if _active_escalation_signals.has(tier_index):
+		_active_escalation_signals[tier_index].release_run_state()
 	_active_escalation_signals.erase(tier_index)
 	_refresh_signal_layout()
 
