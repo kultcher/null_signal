@@ -718,6 +718,8 @@ func _stop_cutscene_alarm(fade_duration: float = 0.35) -> void:
 # hidden) keep the centered position.
 func _center_dialogue_pos() -> Vector2:
 	if timeline_manager != null and timeline_manager.map_mode and signal_manager.visible:
+		if window_manager != null and window_manager.has_method("is_hardware_active") and window_manager.is_hardware_active():
+			return window_manager.hardware_dialogue_position
 		return Vector2(1490, 630)
 	return Vector2(750, 300)
 
@@ -771,10 +773,13 @@ func _focus_runner() -> void:
 	window_manager.focus_control(runner_focus_panel)
 
 func _focus_heat_tracker() -> void:
-	if heat_tracker == null:
+	var target: Control = heat_tracker
+	if window_manager.has_method("is_hardware_active") and window_manager.is_hardware_active() and window_manager.desk_layer.deck != null:
+		target = window_manager.desk_layer.deck.get_heat_focus_control()
+	if target == null:
 		window_manager.clear_focus_overlay()
 		return
-	window_manager.focus_control(heat_tracker, Vector2(24, 24))
+	window_manager.focus_control(target, Vector2(24, 24))
 
 func _focus_door_lock_state(system_id: String) -> void:
 	print("is _focus_door_lock_state doing anything?")

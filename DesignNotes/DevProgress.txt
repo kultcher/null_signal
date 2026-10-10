@@ -80,7 +80,7 @@ Development Progress
 4/7/2026:
 - Added basic escalation with drone spawning
 
-4/8/2026:
+4/08/2026:
 - Brought tutorial up-to-date
 
 4/14/2026:
@@ -88,6 +88,9 @@ Development Progress
 - Added Necromancer Escalation IC
 - Added IC effect visual layer, effects for Reboot, Haze, Bouncer and Faraday
 - Added callback IC
+
+10/08/2026:
+- 
 
 Short-term TODO:
 - Should KILL have a duration component? i.e. kill for X seconds, then signal comes back online?
@@ -162,7 +165,6 @@ Core:
 - guard "combat" expanded
 - distraction terminals expanded
 - Terminal: LINK
-
 
 Metagame:
 - Runner stats

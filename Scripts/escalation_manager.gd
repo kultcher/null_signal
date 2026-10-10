@@ -115,6 +115,12 @@ func _refresh_anchor_layout() -> void:
 	if timeline_manager != null:
 		# Sit just under the timeline strip / facility map.
 		escalation_panel.position.y = timeline_manager.get_timeline_height() + 5.0
+		# Hardware deck: keep the panel (and the escalation signals parked on it) above the deck.
+		var wm = get_node_or_null("../WindowManager")
+		if wm != null and wm.has_method("is_hardware_active") and wm.is_hardware_active():
+			var parent_y: float = (escalation_panel.get_parent() as Node2D).global_position.y if escalation_panel.get_parent() is Node2D else 0.0
+			var limit: float = wm.desk_layer.get_deck_top_y() - parent_y - escalation_panel.size.y - 6.0
+			escalation_panel.position.y = minf(escalation_panel.position.y, limit)
 	escalation_anchor.position = escalation_panel.get_rect().get_center()
 
 func _refresh_panel() -> void:

@@ -35,6 +35,7 @@
 [ext_resource type="Script" uid="uid://cvm3qgwovpur8" path="res://Scripts/Facility/feed_switch_overlay.gd" id="32_feed"]
 
 [ext_resource type="PackedScene" path="res://Scenes/Debug/level_viewer.tscn" id="33_viewer"]
+[ext_resource type="Script" path="res://Scripts/Deck/desk_layer.gd" id="40_desk"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_pcbq1"]
 shader = ExtResource("8_ojo04")
@@ -333,6 +334,7 @@ offset_bottom = 171.0
 
 [node name="WindowManager" type="CanvasLayer" parent="." unique_id=47041843]
 script = ExtResource("5_wudor")
+use_hardware_devices = true
 
 [node name="FocusOverlay" parent="WindowManager" unique_id=2047983454 instance=ExtResource("8_4ll5g")]
 
@@ -497,5 +499,12 @@ offset_right = 111.0
 offset_bottom = 637.0
 
 [node name="LevelViewer" parent="." instance=ExtResource("33_viewer")]
+
+[node name="DeskLayer" type="CanvasLayer" parent="."]
+script = ExtResource("40_desk")
+terminal_path = NodePath("../WorkspaceAnchor/TerminalWindow")
+heat_manager_path = NodePath("../HeatManager")
+hide_when_active = Array[NodePath]([NodePath("../HeatTracker"), NodePath("../WorkspaceAnchor/ProgramDock")])
+objective_tracker_path = NodePath("../WindowManager/ObjectiveTracker")
 
 [connection signal="button_down" from="TempQuitButton" to="RunManager" method="_on_temp_quit_button_button_down"]

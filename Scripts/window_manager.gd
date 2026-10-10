@@ -28,7 +28,20 @@ var codex_popup = preload("res://Scenes/codex_popup.tscn")
 @export var use_hardware_devices := false
 @export var desk_layer_path: NodePath = ^"../DeskLayer"
 
+## Where tutorial dialogue docks during map-mode gameplay when the hardware deck is active
+## (the old spot right of the terminal is now the aux module dock).
+@export var hardware_dialogue_position := Vector2(1500, 60)
+
 var desk_layer: DeskLayer = null
+
+
+func is_hardware_active() -> bool:
+	if not use_hardware_devices:
+		return false
+	if desk_layer == null and is_inside_tree():
+		# resolved lazily so nodes that _ready() before WindowManager can still ask
+		desk_layer = get_node_or_null(desk_layer_path) as DeskLayer
+	return desk_layer != null
 
 var window_count := 0
 var _active_puzzle_windows: Dictionary = {}

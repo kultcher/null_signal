@@ -29,7 +29,6 @@ metadata/_custom_type_script = "uid://diftg5rgtn3kr"
 
 [sub_resource type="Resource" id="Resource_invhn"]
 script = ExtResource("4_w38ew")
-puzzle_locked = true
 metadata/_custom_type_script = "uid://bigsca4rausyq"
 
 [sub_resource type="Resource" id="Resource_hwdih"]

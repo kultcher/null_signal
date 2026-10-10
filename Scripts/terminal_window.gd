@@ -22,6 +22,8 @@ signal session_activated(active_sig: ActiveSignal)
 signal session_deactivated(active_sig: ActiveSignal)
 signal session_closed(active_sig: ActiveSignal)
 signal session_line_display_mode_changed()
+## Emitted after the Scan / Lock / IC detail panels refresh (the hardware deck mirrors them on its lamps).
+signal detail_panel_refreshed()
 
 @onready var command_line = $TerminalInner/TerminalVBox/CmdLineHBox/CommandLine
 @onready var history = $TerminalInner/TerminalVBox/TerminalHistory
@@ -482,11 +484,13 @@ func _close_session_tab(session: TerminalSession, target_signal: ActiveSignal) -
 func _refresh_signal_detail_panel() -> void:
 	if active_signal == null or active_signal == root_signal or active_signal.data == null:
 		_apply_default_detail_panel_state()
+		detail_panel_refreshed.emit()
 		return
 
 	_refresh_scan_panel(active_signal)
 	_refresh_lock_panel(active_signal)
 	_refresh_ic_panel(active_signal)
+	detail_panel_refreshed.emit()
 
 func _apply_default_detail_panel_state() -> void:
 	scan_progress.max_value = 1.0

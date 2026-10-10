@@ -44,18 +44,35 @@ Devices: `deck_main` (1860x440 chassis), `aux_decrypt` (480x430), `cartridge` (7
 
 ## Screen budget (1920x1080)
 
-- Facility map: y 43-343 (unchanged)
-- Free band: y 343-640. Aux modules dock here or over the deck's right column.
-- Deck chassis: y 640-1080. Terminal glass is 1132x314, about 10 lines with the
-  current MainTheme and title bar. Each +22 px of deck height is about +1 line.
+- Facility map: y ~43-600 in map mode (it is taller than the old strip).
+- Escalation panel: clamped to sit just above the deck (y ~546) when the hardware is active.
+- Deck: 1500 px wide, centred (chassis x 210-1710, y 640-1080). Terminal glass 760x314,
+  about 77 columns and 10 lines in MainTheme.
+- Aux module dock 1 sits over the deck's right column (x 1316); docks 2-3 are over the map.
 
-## Trying it in the real game
+## In the game (wired)
 
-1. Add a `CanvasLayer` named `DeskLayer` to `run_main.tscn` (sibling of `WindowManager`)
-   with `desk_layer.gd`. Set `terminal_path` to the TerminalWindow to move it onto the deck.
-2. On `WindowManager`, tick `use_hardware_devices`. Puzzles now plug into aux modules.
-   WindowManager raises its own layer above the desk so tutorial focus/dialogue stay on top.
-3. Not yet handled: ProgramDock and ObjectiveTracker still sit at their old positions under the deck.
+`run_main.tscn` has a `DeskLayer` node and `WindowManager.use_hardware_devices = true`.
+To switch back to the old UI: untick `use_hardware_devices` and delete/disable `DeskLayer`.
+
+What the deck does in-game:
+- Adopts `WorkspaceAnchor/TerminalWindow` onto the main screen; hides its Scan/Lock/IC row.
+- Lamps mirror the terminal's detail panels (`terminal_window.detail_panel_refreshed`), with
+  progress bars for scan / IC. The LOCK lamp is clickable when the lock is actionable and opens a
+  SNIFF / DECRYPT flyout (same as the old toolbox).
+- Heat gauge + status LCD from `GlobalEvents.heat_state_changed` / HeatManager max heat.
+- RAM LEDs from `RAMManager.ram_usage_changed`.
+- Program cartridges from `ProgramManager` (left click load/use, right click eject; seated =
+  loading/running/cleanup with a progress strip).
+- Puzzles plug into aux modules (WindowManager `_puzzle_started`).
+- ObjectiveTracker lives on the deck's secondary screen (hidden while aux dock 1 is occupied).
+- HeatTracker and ProgramDock are hidden (`hide_when_active`).
+- Tutorial: heat focus targets the deck gauge; map-mode dialogue docks at
+  `WindowManager.hardware_dialogue_position` (default 1500, 60).
+
+Edits to existing scripts: `terminal_window.gd` (signal), `window_manager.gd` (hook, dialogue
+position, `is_hardware_active()`), `tutorial_manager.gd` (heat focus, dialogue position),
+`escalation_manager.gd` (clamp above deck).
 
 ## Next
 

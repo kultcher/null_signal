@@ -509,8 +509,16 @@ class Device:
 # ---------------------------------------------------------------------------
 
 def build_main_deck(M, font):
-    """Main deck: indicator lamps left, wide terminal screen centre, status/aux bay right, heat gauge along the bottom."""
-    W, H = 1860, 440
+    """Main deck: indicator lamps left, terminal screen, vertical RAM strip, status/program bay right,
+    heat gauge along the bottom. Width tuned so the deck sits centred with some desk showing."""
+    H = 440
+    SCREEN_W = 760                       # terminal glass width
+    LX, LW = 14, 238                     # left plate
+    SX = LX + LW + 6                     # mid plate (screen) x
+    MW = SCREEN_W + 32                   # mid plate width
+    RAMX, RAMW = SX + MW + 6, 44         # RAM strip
+    RX, RW = RAMX + RAMW + 6, 378        # right plate (status, screen2, program bay)
+    W = RX + RW + 16
     d = Device("deck_main", W, H, margin=28)
     FACE = ("face",)
 
@@ -528,94 +536,99 @@ def build_main_deck(M, font):
         d.rect(f"handle_{side}", gx, 108, 14, 224)
 
     # raised panels (panel lines = gaps between them)
-    d.prism("plate_left", rect_pts(14, 10, 278, 384, 6), 0.0, 0.02, M["plate"], bevel=0.012, cuts=FACE)
-    d.prism("plate_mid", rect_pts(298, 8, 1164, 386, 4), 0.0, 0.012, M["trim"], bevel=0.008, cuts=FACE)
-    d.prism("plate_right", rect_pts(1468, 10, 378, 384, 6), 0.0, 0.02, M["plate"], bevel=0.012, cuts=FACE)
+    d.prism("plate_left", rect_pts(LX, 10, LW, 384, 6), 0.0, 0.02, M["plate"], bevel=0.012, cuts=FACE)
+    d.prism("plate_mid", rect_pts(SX, 8, MW, 386, 4), 0.0, 0.012, M["trim"], bevel=0.008, cuts=FACE)
+    d.prism("plate_ram", rect_pts(RAMX, 10, RAMW, 384, 5), 0.0, 0.02, M["plate"], bevel=0.012, cuts=FACE)
+    d.prism("plate_right", rect_pts(RX, 10, RW, 384, 6), 0.0, 0.02, M["plate"], bevel=0.012, cuts=FACE)
 
     # --- centre: header strip + main screen ---
-    d.cut("face", rect_pts(316, 16, 1128, 28, 3), -0.04)
-    d.prism("header_lcd", rect_pts(318, 18, 1124, 24), -0.05, -0.035, M["lcd"])
-    d.rect("header", 318, 18, 1124, 24)
+    d.cut("face", rect_pts(SX + 18, 16, SCREEN_W - 4, 28, 3), -0.04)
+    d.prism("header_lcd", rect_pts(SX + 20, 18, SCREEN_W - 8, 24), -0.05, -0.035, M["lcd"])
+    d.rect("header", SX + 20, 18, SCREEN_W - 8, 24)
 
-    d.prism("screen_bezel", rect_pts(298, 46, 1164, 346, 8), 0.012, 0.045, M["trim"], bevel=0.012, segs=2, cuts=FACE)
-    d.cut("face", rect_pts(308, 56, 1144, 326, 6), -0.14)
-    d.prism("screen_glass", rect_pts(314, 62, 1132, 314, 4), -0.14, -0.11, M["glass"])
-    d.rect("screen", 314, 62, 1132, 314)
+    d.prism("screen_bezel", rect_pts(SX, 46, MW, 346, 8), 0.012, 0.045, M["trim"], bevel=0.012, segs=2, cuts=FACE)
+    d.cut("face", rect_pts(SX + 10, 56, SCREEN_W + 12, 326, 6), -0.14)
+    d.prism("screen_glass", rect_pts(SX + 16, 62, SCREEN_W, 314, 4), -0.14, -0.11, M["glass"])
+    d.rect("screen", SX + 16, 62, SCREEN_W, 314)
 
-    # --- left column: indicator lamps, RAM LEDs, hazard plate ---
-    d.label("maker", "NS/DECK MK.II", 34, 30, 13, 0.02, M["stencil"], font=font)
-    d.prism("led_power", circle_pts(146, 30, 5, 16), -0.01, 0.026, M["led_pwr"], bevel=0.004)
-    d.point("led_power", 146, 30)
+    # --- left column: maker plate, vents, indicator lamps, hazard plate ---
+    d.label("maker", "NS/DECK MK.II", 30, 30, 13, 0.02, M["stencil"], font=font)
+    d.prism("led_power", circle_pts(138, 30, 5, 16), -0.01, 0.026, M["led_pwr"], bevel=0.004)
+    d.point("led_power", 138, 30)
     for i in range(4):
-        d.cut("face", rect_pts(160, 17 + i * 7, 112, 3), -0.06)
+        d.cut("face", rect_pts(152, 17 + i * 7, 80, 3), -0.06)
 
     lamp_names = ["lamp_scan", "lamp_lock", "lamp_ic", "lamp_aux"]
     for i, nm in enumerate(lamp_names):
         y = 54 + i * 68
-        d.cut("face", rect_pts(34, y, 240, 58, 5), -0.03)
-        d.prism(nm, rect_pts(38, y + 4, 232, 50, 4), -0.03, -0.012, M["lens"])
-        d.rect(nm, 38, y + 4, 232, 50)
+        d.cut("face", rect_pts(30, y, 204, 58, 5), -0.03)
+        d.prism(nm, rect_pts(34, y + 4, 196, 50, 4), -0.03, -0.012, M["lens"])
+        d.rect(nm, 34, y + 4, 196, 50)
 
-    d.label("ram", "RAM", 34, 336, 12, 0.02, M["stencil"], font=font)
-    for i in range(8):
-        x = 84 + i * 26
-        d.prism(f"ram_{i}", circle_pts(x, 336, 6, 16), -0.01, 0.03, M["led_off"], bevel=0.004)
-        d.point(f"ram_{i}", x, 336)
+    d.prism("hazard", rect_pts(30, 334, 204, 48, 3), 0.02, 0.026, M["hazard"], bevel=0.003)
 
-    d.prism("hazard", rect_pts(34, 358, 240, 26, 3), 0.02, 0.026, M["hazard"], bevel=0.003)
-
-    for x, y in [(22, 22), (284, 22), (22, 382), (284, 382)]:
+    for x, y in [(22, 22), (244, 22), (22, 384), (244, 384)]:
         d.screw(x, y, 0.02, M["trim"])
 
+    # --- RAM strip: vertical LED column between the screen and the program bay ---
+    cx = RAMX + RAMW / 2.0
+    d.label("ram", "RAM", cx, 32, 14, 0.02, M["stencil"], align="CENTER", font=font)
+    for i in range(8):
+        y = 66 + i * 38
+        d.prism(f"ram_{i}", circle_pts(cx, y, 7, 18), -0.01, 0.03, M["led_off"], bevel=0.004)
+        d.point(f"ram_{i}", cx, y)
+    d.screw(cx, 384, 0.02, M["trim"], r=5)
+
     # --- right column: status LCD, secondary screen, cartridge bay ---
-    d.prism("status_bezel", rect_pts(1484, 12, 346, 60, 5), 0.02, 0.04, M["trim"], bevel=0.008, cuts=FACE)
-    d.cut("face", rect_pts(1490, 18, 334, 48, 4), -0.05)
-    d.prism("status_lcd", rect_pts(1494, 22, 326, 40, 2), -0.06, -0.04, M["lcd"])
-    d.rect("status", 1494, 22, 326, 40)
+    d.prism("status_bezel", rect_pts(RX + 16, 12, 346, 60, 5), 0.02, 0.04, M["trim"], bevel=0.008, cuts=FACE)
+    d.cut("face", rect_pts(RX + 22, 18, 334, 48, 4), -0.05)
+    d.prism("status_lcd", rect_pts(RX + 26, 22, 326, 40, 2), -0.06, -0.04, M["lcd"])
+    d.rect("status", RX + 26, 22, 326, 40)
 
-    d.prism("screen2_bezel", rect_pts(1484, 70, 346, 182, 6), 0.02, 0.042, M["trim"], bevel=0.008, cuts=FACE)
-    d.cut("face", rect_pts(1490, 76, 334, 170, 5), -0.10)
-    d.prism("screen2_glass", rect_pts(1496, 82, 322, 158, 3), -0.10, -0.075, M["glass"])
-    d.rect("screen2", 1496, 82, 322, 158)
+    d.prism("screen2_bezel", rect_pts(RX + 16, 70, 346, 182, 6), 0.02, 0.042, M["trim"], bevel=0.008, cuts=FACE)
+    d.cut("face", rect_pts(RX + 22, 76, 334, 170, 5), -0.10)
+    d.prism("screen2_glass", rect_pts(RX + 28, 82, 322, 158, 3), -0.10, -0.075, M["glass"])
+    d.rect("screen2", RX + 28, 82, 322, 158)
 
-    d.label("prg", "PRG BAY", 1492, 260, 11, 0.02, M["stencil"], font=font)
+    d.label("prg", "PRG BAY", RX + 24, 261, 13, 0.02, M["stencil"], font=font)
     for i in range(4):
-        x = 1492 + i * 84
+        x = RX + 24 + i * 84
         d.cut("face", rect_pts(x, 272, 74, 106, 3), -0.16)
         d.prism(f"slot_floor_{i}", rect_pts(x, 272, 74, 106), -0.17, -0.155, M["void"])
         d.rect(f"cart_slot_{i}", x, 272, 74, 106)
 
-    for x, y in [(1476, 22), (1838, 22), (1476, 382), (1838, 382)]:
+    for x, y in [(RX + 8, 22), (RX + RW - 8, 22), (RX + 8, 384), (RX + RW - 8, 384)]:
         d.screw(x, y, 0.02, M["trim"])
 
-    # rivet rows along the trim and the bottom rail
-    d.rivets(60, 1800, 433, 0.0, M["deck"], step=58)
+    # rivets along the bottom rail
+    d.rivets(60, W - 60, 433, 0.0, M["deck"], step=58)
 
     # --- bottom: heat gauge ---
-    d.cut("face", rect_pts(22, 402, 1816, 24, 3), -0.05)
-    d.prism("heat_glass", rect_pts(26, 405, 1808, 18), -0.06, -0.035, M["lcd"])
-    d.rect("heat", 26, 405, 1808, 18)
-    for x in (8, 1852):
+    d.cut("face", rect_pts(22, 402, W - 44, 24, 3), -0.05)
+    d.prism("heat_glass", rect_pts(26, 405, W - 52, 18), -0.06, -0.035, M["lcd"])
+    d.rect("heat", 26, 405, W - 52, 18)
+    for x in (8, W - 8):
         d.screw(x, 220, 0.0, M["trim"], r=5)
     for i in range(11):
-        tx = 22 + i * 1816 / 10.0
+        tx = 22 + i * (W - 44) / 10.0
         d.cut("face", rect_pts(tx - 1.5, 396, 3, 5 if i % 5 else 6), -0.012)
 
     # --- top edge silhouette: cooling fins + antenna jack ---
-    d.prism("fin_block", rect_pts(480, -12, 220, 26, 4), -0.22, 0.03, M["trim"], bevel=0.008)
+    fx = SX + 120
+    d.prism("fin_block", rect_pts(fx, -12, 220, 26, 4), -0.22, 0.03, M["trim"], bevel=0.008)
     for i in range(9):
-        d.prism(f"fin_{i}", rect_pts(492 + i * 22, -10, 10, 20, 2), 0.03, 0.065, M["deck"], bevel=0.004)
-    d.prism("ant_jack", circle_pts(900, -4, 13, 24), -0.15, 0.05, M["trim"], bevel=0.008, cuts=("jack",))
-    d.cut("jack", circle_pts(900, -4, 6, 16), 0.02)
-    d.prism("ant_jack_core", circle_pts(900, -4, 6, 16), 0.0, 0.025, M["void"])
+        d.prism(f"fin_{i}", rect_pts(fx + 12 + i * 22, -10, 10, 20, 2), 0.03, 0.065, M["deck"], bevel=0.004)
+    jx = SX + 420
+    d.prism("ant_jack", circle_pts(jx, -4, 13, 24), -0.15, 0.05, M["trim"], bevel=0.008, cuts=("jack",))
+    d.cut("jack", circle_pts(jx, -4, 6, 16), 0.02)
+    d.prism("ant_jack_core", circle_pts(jx, -4, 6, 16), 0.0, 0.025, M["void"])
 
     # --- expansion port on the top edge (aux modules cable in here) ---
-    d.prism("exp_port", rect_pts(1250, -18, 116, 34, 4), -0.26, 0.035, M["trim"], bevel=0.01, cuts=("port",))
-    d.cut("port", rect_pts(1270, -10, 76, 14, 2), -0.02)
-    d.prism("exp_port_floor", rect_pts(1270, -10, 76, 14), -0.04, -0.025, M["void"])
-    d.point("exp_port_a", 1308, -3)
-
-    # grab zones: anywhere on the bezel that is not a screen/lamp. Godot uses chassis_rect minus screens.
+    px = SX + MW - 160
+    d.prism("exp_port", rect_pts(px, -18, 116, 34, 4), -0.26, 0.035, M["trim"], bevel=0.01, cuts=("port",))
+    d.cut("port", rect_pts(px + 20, -10, 76, 14, 2), -0.02)
+    d.prism("exp_port_floor", rect_pts(px + 20, -10, 76, 14), -0.04, -0.025, M["void"])
+    d.point("exp_port_a", px + 58, -3)
     return d
 
 
