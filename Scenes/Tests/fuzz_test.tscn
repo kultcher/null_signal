@@ -1,0 +1,275 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Puzzles/fuzz_test.gd" id="1"]
+[ext_resource type="PackedScene" path="res://Scenes/fuzz.tscn" id="2"]
+[ext_resource type="Resource" path="res://Resources/PuzzlePrefabs/fuzz_default.tres" id="3"]
+[ext_resource type="FontFile" path="res://Visuals/Fonts/ShareTechMono-Regular.ttf" id="4"]
+
+[sub_resource type="Theme" id="Theme"]
+default_font = ExtResource("4")
+default_font_size = 20
+
+[node name="FuzzTest" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme")
+script = ExtResource("1")
+config = ExtResource("3")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.01, 0.018, 0.024, 1)
+
+[node name="Layout" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 60.0
+offset_top = 40.0
+offset_right = -60.0
+offset_bottom = -40.0
+theme_override_constants/separation = 60
+
+[node name="Play" type="VBoxContainer" parent="Layout"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 24
+
+[node name="Heading" type="Label" parent="Layout/Play"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "FUZZ // PROTOTYPE LAB"
+
+[node name="Puzzle" parent="Layout/Play" instance=ExtResource("2")]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Result" type="Label" parent="Layout/Play"]
+layout_mode = 2
+text = "Settings apply on restart."
+autowrap_mode = 2
+
+[node name="Unfocus" type="LineEdit" parent="Layout/Play"]
+layout_mode = 2
+placeholder_text = "Click here to test loss of puzzle focus."
+
+[node name="Tuning" type="PanelContainer" parent="Layout"]
+custom_minimum_size = Vector2(610, 0)
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Layout/Tuning"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Fields" type="VBoxContainer" parent="Layout/Tuning/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Heading" type="Label" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+text = "TUNING // APPLY + RESTART"
+theme_override_font_sizes/font_size = 26
+
+[node name="Knobs" type="GridContainer" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+columns = 2
+theme_override_constants/h_separation = 28
+theme_override_constants/v_separation = 8
+
+[node name="starting_ammo_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Starting packets"
+
+[node name="starting_ammo" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0
+max_value = 100
+step = 1
+value = 5
+
+[node name="max_ammo_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Packet capacity"
+
+[node name="max_ammo" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 1
+max_value = 100
+step = 1
+value = 5
+
+[node name="regeneration_per_second_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Packets regenerated / second"
+
+[node name="regeneration_per_second" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0
+max_value = 100
+step = 0.1
+value = 1
+
+[node name="flight_time_sec_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Packet flight (seconds)"
+
+[node name="flight_time_sec" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0.01
+max_value = 10
+step = 0.01
+value = 0.5
+
+[node name="sweet_spot_arc_deg_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Sweet spot arc (degrees)"
+
+[node name="sweet_spot_arc_deg" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0
+max_value = 360
+step = 1
+value = 30
+
+[node name="target_points_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Points to solve"
+
+[node name="target_points" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0.01
+max_value = 10000
+step = 1
+value = 100
+
+[node name="direct_hit_points_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Direct hit points"
+
+[node name="direct_hit_points" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0.01
+max_value = 1000
+step = 1
+value = 20
+
+[node name="falloff_points_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Falloff points"
+
+[node name="falloff_points" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0
+max_value = 100
+step = 0.1
+value = 2
+
+[node name="falloff_step_deg_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Falloff interval (degrees)"
+
+[node name="falloff_step_deg" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0.01
+max_value = 180
+step = 0.1
+value = 5
+
+[node name="decay_points_per_second_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Progress decay / second"
+
+[node name="decay_points_per_second" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0
+max_value = 1000
+step = 0.1
+value = 0
+
+[node name="impact_hold_sec_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Impact color hold (seconds)"
+
+[node name="impact_hold_sec" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0
+max_value = 30
+step = 0.1
+value = 2.5
+
+[node name="impact_fade_sec_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Fade to white (seconds)"
+
+[node name="impact_fade_sec" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 0
+max_value = 30
+step = 0.1
+value = 2.5
+
+[node name="impact_arc_deg_Label" type="Label" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+layout_mode = 2
+text = "Impact mark width (degrees)"
+
+[node name="impact_arc_deg" type="SpinBox" parent="Layout/Tuning/Scroll/Fields/Knobs"]
+custom_minimum_size = Vector2(135, 0)
+layout_mode = 2
+min_value = 1
+max_value = 90
+step = 1
+value = 10
+
+[node name="DifficultyLabel" type="Label" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+text = "Resource difficulty profile (empty list uses defaults)"
+
+[node name="Difficulty" type="SpinBox" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+min_value = 1.0
+max_value = 20.0
+value = 1.0
+
+[node name="AngleLabel" type="Label" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+text = "Test target angle (-1 = random; 0 = right, 90 = down)"
+
+[node name="Angle" type="SpinBox" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+min_value = -1.0
+max_value = 360.0
+value = -1.0
+
+[node name="Reveal" type="CheckButton" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+text = "Reveal sweet spot (test only)"
+
+[node name="Apply" type="Button" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+text = "Apply + restart"
+
+[node name="Reset" type="Button" parent="Layout/Tuning/Scroll/Fields"]
+layout_mode = 2
+text = "Restore default values"

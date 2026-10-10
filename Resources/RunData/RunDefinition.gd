@@ -317,8 +317,8 @@ func make_puzzle(
 func make_sniff_puzzle(difficulty: int = 1, sniff_config: SniffPuzzleConfig = null) -> PuzzleComponent:
 	return make_puzzle(PuzzleComponent.Type.SNIFF, difficulty, "", sniff_config)
 
-func make_fuzz_puzzle(difficulty: int = 1) -> PuzzleComponent:
-	return make_puzzle(PuzzleComponent.Type.FUZZ, difficulty)
+func make_fuzz_puzzle(difficulty: int = 1, fuzz_config: FuzzPuzzleConfig = null) -> PuzzleComponent:
+	return make_puzzle(PuzzleComponent.Type.FUZZ, difficulty, "", fuzz_config)
 
 func make_decrypt_puzzle(difficulty: int = 1, encryption_key: String = "", decrypt_config: DecryptPuzzleConfig = null) -> PuzzleComponent:
 	return make_puzzle(PuzzleComponent.Type.DECRYPT, difficulty, encryption_key, decrypt_config)
@@ -368,7 +368,8 @@ func build_custom_puzzle(name: StringName, params: Dictionary) -> PuzzleComponen
 				puzzle.set_custom_fixed()
 			return puzzle
 		"fuzz":
-			var puzzle := make_fuzz_puzzle(difficulty)
+			var fuzz_config = params.get("config", null) as FuzzPuzzleConfig
+			var puzzle := make_fuzz_puzzle(difficulty, fuzz_config)
 			if not uses_escalation_difficulty:
 				puzzle.set_custom_fixed()
 			return puzzle

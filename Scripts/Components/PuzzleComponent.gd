@@ -48,6 +48,9 @@ func ensure_initial_lock_state():
 
 func ensure_puzzle_generated() -> void:
 	match puzzle_type:
+		Type.FUZZ:
+			if not puzzle_config is FuzzPuzzleConfig:
+				puzzle_config = FuzzPuzzleConfig.new()
 		Type.SNIFF:
 			var sniff_config := get_sniff_config()
 			if sniff_config == null:
@@ -67,6 +70,10 @@ func get_sniff_config() -> SniffPuzzleConfig:
 
 func get_decrypt_config() -> DecryptPuzzleConfig:
 	return puzzle_config as DecryptPuzzleConfig
+
+func get_fuzz_config() -> FuzzPuzzleConfig:
+	var fuzz := puzzle_config as FuzzPuzzleConfig
+	return fuzz.for_difficulty(difficulty) if fuzz != null else null
 
 func process_solve(active_sig: ActiveSignal):
 	print("Puzzle Component: Puzzle Solved!")

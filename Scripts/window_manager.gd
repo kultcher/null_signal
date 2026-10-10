@@ -4,7 +4,7 @@
 extends CanvasLayer
 
 var sniff = preload("res://Scenes/sniff.tscn")
-#var fuzz = preload("res://Scenes/fuzz.tscn")
+var fuzz = preload("res://Scenes/fuzz.tscn")
 var decrypt = preload("res://Scenes/decrypt.tscn")
 var game_over_scene = preload("res://Scenes/game_over.tscn")
 var dialogue_window_scene = preload("res://Scenes/dialogue_window.tscn")
@@ -218,6 +218,8 @@ func _on_tutorial_dialogue_dismissed() -> void:
 func _puzzle_started(active_sig: ActiveSignal, puzzle_type: PuzzleComponent.Type):
 	var puzzle_window
 	match puzzle_type:
+		PuzzleComponent.Type.FUZZ:
+			puzzle_window = fuzz.instantiate()
 		PuzzleComponent.Type.DECRYPT:
 			puzzle_window = decrypt.instantiate()
 		_:
