@@ -50,6 +50,17 @@ and whether difficulty scales with escalation. These are the initial authored
 values, including hidden protection, independent of scans and changes in the
 frozen live run. No IC hooks run while building the preview.
 
+## Runtime
+
+Runtimes are walking time at the run's base speed (`BASE_CELLS_PER_SECOND`),
+with no hustle, holds, doors or dialogue: a floor for how long the level takes.
+The section dropdown shows each section's runtime, "All sections" the whole
+route, and the status line the level total. Route waypoint labels add the time
+to reach that point (`path 31.0  3:27`), as does the Restart-here readout.
+
+Flavor objects draw as grey dots; with Signal labels on (and zoomed in far
+enough) their text is printed next to them.
+
 ## Authoring and reload
 
 Edit and save the selected run's `.gd`, then press R. Reload preserves the

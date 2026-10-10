@@ -147,6 +147,10 @@ func _setup_mobility(signal_wrapper: ActiveSignal) -> void:
 	mobility_controller = MobilityController.new()
 	add_child(mobility_controller)
 	mobility_controller.initialize(signal_wrapper)
+	if mobility_controller.is_processing():
+		var hint := HeadingHint.new()
+		add_child(hint)
+		hint.setup(self, mobility_controller)
 
 func set_guard_revealed(is_revealed: bool) -> void:
 	_guard_revealed = is_revealed

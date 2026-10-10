@@ -16,6 +16,10 @@ const DEFAULT_EXTENT := 10000.0
 
 var rooms: Array[FacilityRoom] = []
 var sections: Array[FacilitySection] = []
+# Flavor objects: purely descriptive map annotations (a small grey dot with a
+# line of hover text). Not signals: no scan, connect, IC or detection.
+# Each is {"cell", "lane", "text", "model", "rot"}; see RunDefinition.flavor().
+var flavor: Array[Dictionary] = []
 var lane_to_cell_scale: float = 0.375
 
 func _init(room_list: Array[FacilityRoom] = [], section_list: Array[FacilitySection] = []) -> void:
@@ -113,6 +117,16 @@ func _assign_rooms_to_sections() -> void:
 			continue
 		var section := get_section_for_cell((room.start_cell + room.end_cell) * 0.5)
 		room.section_id = section.id
+
+# --- flavor ---
+
+# Flavor objects belong to the section their cell falls in, like signals.
+func get_flavor_in_section(section: FacilitySection) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for item in flavor:
+		if get_section_for_cell(float(item["cell"])) == section:
+			result.append(item)
+	return result
 
 # --- sections ---
 

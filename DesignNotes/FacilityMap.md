@@ -120,6 +120,33 @@ normalized to the footprint and heights in pixels. Rough scale: ~40 px per
 metre on the floor (a cell is 240 px, a lane 90 px), heights stylised at
 ~20 px per metre.
 
+### Flavor objects
+
+Small grey dots with a line of hover text that make a space feel inhabited.
+They are not signals: no scan, connect, IC, detection or range rules, and they
+never affect gameplay. They live on the layout and are drawn by the map (and
+the level viewer, which prints their text when Signal labels is on).
+
+```gdscript
+func get_flavor() -> Array[Dictionary]:
+	return [
+		flavor(5.58, -0.3, "EV CHARGER B2-14 // SESSION ACTIVE 1,412 DAYS\nBalance due: 88,214 KC."),
+		flavor(9.6, 4.0, "VEHICLE ALARM // STATUS: ARMED\nBattery: 0%", &"car"),  # optional prop
+	]
+```
+
+- Like signals, a flavor object belongs to the section its cell falls in.
+- Keep text to one or two short lines; `\n` breaks lines.
+- The optional model is drawn at its default size under the dot.
+
+### Mobile signal heading hint
+
+Moving signals (drones, guards, cleaning bots) show a small amber chevron
+orbiting the icon, pointing at their current destination: the next patrol
+point, or an alert destination. It's dimmed while the signal dwells (pointing
+where it will go next), hidden while investigating or disabled, and hidden for
+unrevealed guards. Not the full patrol route on purpose.
+
 ### Escalation
 
 `RunDefinition.is_escalation_enabled()` (default true). The tutorial returns
