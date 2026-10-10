@@ -7,6 +7,9 @@ var _font: Font = preload("res://Visuals/Fonts/ShareTechMono-Regular.ttf")
 const GRID := Color(0.35, 0.75, 0.82, 0.14)
 const INK := Color(0.65, 0.9, 0.95)
 const GOLD := Color(1.0, 0.8, 0.25)
+const THREAT_CERTAIN := Color(1.0, 0.22, 0.2)
+const THREAT_POSSIBLE := Color(1.0, 0.62, 0.15)
+const THREAT_NEVER := Color(0.45, 0.6, 0.65)
 
 func _draw() -> void:
 	if viewer.facility_layout == null:
@@ -15,6 +18,9 @@ func _draw() -> void:
 		_draw_distances()
 	if viewer.boundary_toggle.button_pressed:
 		_draw_sections()
+	if viewer.threat_toggle != null and viewer.threat_toggle.button_pressed:
+		for entry in viewer.visible_entries():
+			_draw_threat_bands(entry)
 	for entry in viewer.visible_entries():
 		_draw_signal(entry)
 	if viewer.route_toggle.button_pressed and viewer.distance_toggle.button_pressed:
@@ -111,6 +117,8 @@ func _draw_signal(entry: Dictionary) -> void:
 	if not rect.has_point(position):
 		return
 	var color := GOLD if selected else Color(0.25, 0.9, 0.75)
+	if viewer.threat_toggle != null and viewer.threat_toggle.button_pressed:
+		_draw_threat_ring(position, data, selected)
 	# These markers intentionally reveal even hidden/unknown authored signals.
 	draw_circle(position, 7.0 if selected else 5.0, color)
 	draw_circle(position, 11.0 if selected else 8.0, color, false, 1.5)
@@ -172,3 +180,57 @@ func _draw_ruler() -> void:
 		draw_circle(b, 5.0, GOLD)
 		draw_dashed_line(a, b, GOLD, 2.0, 8.0)
 		_label(b + Vector2(8.0, -8.0), "B", GOLD)
+
+# --- threat ---
+
+static func threat_color(reach: String) -> Color:
+	match reach:
+		"certain": return THREAT_CERTAIN
+		"possible": return THREAT_POSSIBLE
+		"never": return THREAT_NEVER
+	return Color(0.0, 0.0, 0.0, 0.0)
+
+# Route stretches a signal can see, drawn along the runner's path. Possible
+# coverage fades with the fraction of the cycle it is watched.
+func _draw_threat_bands(entry: Dictionary) -> void:
+	var data: SignalData = entry["data"]
+	var report: Dictionary = viewer.reach_reports.get(data.system_id, {})
+	if report.is_empty() or report["intervals"].is_empty():
+		return
+	var selected: bool = viewer.selected_index >= 0 and viewer.entries[viewer.selected_index] == entry
+	var base := threat_color(report["reach"])
+	var width := maxf(4.0, 0.35 * viewer.lane_height)
+	for interval in report["intervals"]:
+		var alpha := 0.55 if report["reach"] == "certain" else 0.15 + 0.4 * float(interval["max_ratio"])
+		if selected:
+			alpha = minf(1.0, alpha + 0.3)
+		var points := PackedVector2Array()
+		var progress: float = interval["from"]
+		var to: float = interval["to"]
+		var step := maxf(0.05, (to - progress) / 40.0)
+		while true:
+			var at: Vector2 = viewer.facility_layout.sample_position(minf(progress, to))
+			points.append(viewer.cell_lane_to_screen(at.x, at.y))
+			if progress >= to:
+				break
+			progress += step
+		if points.size() == 1:
+			points.append(points[0] + Vector2(1.0, 0.0))
+		draw_polyline(points, Color(base, alpha), width)
+		if selected:
+			_label(points[0] + Vector2(0.0, -width), "%s %d%%" % [data.system_id, int(round(float(interval["max_ratio"]) * 100.0))], base, 12)
+
+func _draw_threat_ring(position: Vector2, data: SignalData, selected: bool) -> void:
+	var report: Dictionary = viewer.reach_reports.get(data.system_id, {})
+	if report.is_empty():
+		return
+	var color := threat_color(report["reach"])
+	if color.a <= 0.0:
+		return
+	var radius := 15.0 if selected else 12.0
+	if report["reach"] == "never":
+		draw_arc(position, radius, 0.0, TAU, 24, Color(color, 0.7), 1.5)
+	else:
+		draw_arc(position, radius, 0.0, TAU, 24, color, 2.5)
+		if report["reach"] == "possible":
+			_label(position + Vector2(-radius - 34.0, 5.0), "%d%%" % int(round(float(report["hit_walk"]) * 100.0)), color, 11)

@@ -36,7 +36,7 @@ lane-to-cell metric captured when loading, and does not change with zoom.
 It is not distance travelled along the runner's route. Route waypoints have
 cumulative `path` distance labels when both Route and Distance are enabled.
 
-Route, Vision, Patrols, Sections, Signal labels, and Security can each be toggled.
+Route, Vision, Patrols, Sections, Signal labels, Security, and Threat can each be toggled.
 Hidden and unscanned authored signals are always included. Vision uses the
 same polygon function as gameplay; sweep cameras display their initial sweep
 orientation, with the sweep schedule in the inspector. Patrols are static paths,
@@ -49,6 +49,14 @@ The inspector includes puzzle configuration, IC descriptions, tuning values,
 and whether difficulty scales with escalation. These are the initial authored
 values, including hidden protection, independent of scans and changes in the
 frozen live run. No IC hooks run while building the preview.
+
+Threat (off by default) runs `ReachAnalyzer` and `CostTable` on load/reload.
+Route stretches each signal can see are drawn as bands along the runner's
+path: red for certain, amber (stronger = watched more of its cycle) for
+possible. Signal rings use the same colors, grey for never; possible rings show
+the walk-through hit chance. The inspector adds THREAT // REACH and
+COST // ESTIMATE with a fit verdict; the status line totals reach classes.
+See `ThreatAndCost.md`.
 
 ## Runtime
 
@@ -113,6 +121,7 @@ godot --headless --path . res://Tests/level_viewer_test.tscn
 godot --headless --path . res://Tests/level_viewer_test.tscn -- --invalid-reload
 godot --headless --path . res://Tests/level_viewer_restart_test.tscn
 godot --headless --path . res://Tests/regtest.tscn
+godot --headless --path . res://Tests/threat_analysis_test.tscn
 ```
 
 The invalid-reload variant deliberately emits a parse error and verifies that

@@ -41,6 +41,11 @@ var _run_paths: Array[String] = []
 var _runner_position := Vector2.ZERO
 var start_location: Dictionary = {}
 var start_position := Vector2.ZERO
+# Threat analysis (ReachAnalyzer + CostTable), keyed by system_id.
+var threat_toggle: CheckButton
+var reach_reports: Dictionary = {}
+var cost_estimates: Dictionary = {}
+var analysis_msec := 0
 
 # Projection interface used by the shared facility renderer.
 var map_mode := true
@@ -64,7 +69,14 @@ func _ready() -> void:
 	$Panel/Header/Controls/Reload.pressed.connect(reload_preview)
 	$Panel/Header/Controls/Close.pressed.connect(close_viewer)
 	restart_button.pressed.connect(restart_here)
-	for toggle in [distance_toggle, route_toggle, vision_toggle, patrol_toggle, boundary_toggle, labels_toggle, security_toggle]:
+	# Built in code (a copy of the Security toggle) to keep the scene untouched.
+	threat_toggle = security_toggle.duplicate(0) as CheckButton
+	threat_toggle.name = "Threat"
+	threat_toggle.text = "Threat"
+	threat_toggle.button_pressed = false
+	threat_toggle.tooltip_text = "Reach analysis: route bands where each signal can see the runner, plus cost vs decision window in the inspector."
+	security_toggle.get_parent().add_child(threat_toggle)
+	for toggle in [distance_toggle, route_toggle, vision_toggle, patrol_toggle, boundary_toggle, labels_toggle, security_toggle, threat_toggle]:
 		toggle.toggled.connect(func(_value: bool): _redraw())
 
 func _input(event: InputEvent) -> void:
@@ -226,10 +238,77 @@ func load_preview(path: String) -> bool:
 				section_index = i
 	_sync_sections()
 	_sync_start_point()
+	_analyze()
 	_update_inspector()
-	status.text = "%s | %d signals | %d sections | runtime %s at base speed | Authored preview; gameplay frozen. Reload updates this preview only." % [run.get_display_name(), entries.size(), layout.sections.size(), format_runtime(layout.get_total_length())]
+	status.text = "%s | %d signals | %d sections | runtime %s at base speed | %s | Authored preview; gameplay frozen. Reload updates this preview only." % [run.get_display_name(), entries.size(), layout.sections.size(), format_runtime(layout.get_total_length()), reach_summary()]
 	_redraw()
 	return true
+
+# --- threat analysis ---
+
+func analysis_params() -> Dictionary:
+	var params := {}
+	var timeline = get_parent().get_node_or_null("SignalTimeline/TimelineManager")
+	if timeline != null:
+		params["base_speed"] = float(timeline.BASE_CELLS_PER_SECOND)
+		params["hustle_mult"] = float(timeline.fast_speed_modifier)
+		params["interaction_range"] = float(timeline.signal_interaction_range_cells)
+		params["visible_cells"] = float(timeline.VISIBLE_CELLS)
+		params["runner_offset_cells"] = float(timeline.runner_screen_offset_cells)
+	return params
+
+func _analyze() -> void:
+	var started := Time.get_ticks_msec()
+	reach_reports = ReachAnalyzer.analyze(facility_layout, entries, analysis_params())
+	cost_estimates.clear()
+	var costs := CostTable.shared()
+	for entry in entries:
+		var data: SignalData = entry["data"]
+		cost_estimates[data.system_id] = costs.estimate(data)
+	analysis_msec = Time.get_ticks_msec() - started
+
+func reach_summary() -> String:
+	var counts := {}
+	for report in reach_reports.values():
+		var reach: String = report["reach"]
+		counts[reach] = int(counts.get(reach, 0)) + 1
+	var parts: Array[String] = []
+	for reach in ["certain", "possible", "never"]:
+		if counts.has(reach):
+			parts.append("%d %s" % [counts[reach], reach])
+	return "reach " + (", ".join(parts) if not parts.is_empty() else "n/a")
+
+func threat_details(data: SignalData) -> String:
+	var report: Dictionary = reach_reports.get(data.system_id, {})
+	if report.is_empty():
+		return ""
+	var text := "\n\nTHREAT // REACH\nKind: %s\nReach: %s\nConsequence: %s" % [report["kind"], String(report["reach"]).to_upper(), report["consequence"]]
+	if report["mobile"]:
+		text += "\nMobile: yes (cycle %.1fs)" % report["cycle_sec"]
+	elif report["cycle_sec"] > 0.2:
+		text += "\nSweep cycle: %.1fs" % report["cycle_sec"]
+	for interval in report["intervals"]:
+		text += "\nRoute %.1f-%.1f (cells %.1f-%.1f) watched %d%%" % [interval["from"], interval["to"], interval["from_cell"], interval["to_cell"], int(round(interval["max_ratio"] * 100.0))]
+	if report["reach"] == "certain" or report["reach"] == "possible":
+		text += "\nSeen if passed: walk %d%% | hustle %d%%" % [int(round(report["hit_walk"] * 100.0)), int(round(report["hit_hustle"] * 100.0))]
+		text += "\nInteract at route %.1f, threat at %.1f" % [report["interact_progress"], report["threat_progress"]]
+		text += "\nDecision window: %.1fs walk | %.1fs hustle" % [report["window_walk"], report["window_hustle"]]
+	var estimate: Dictionary = cost_estimates.get(data.system_id, {})
+	if not estimate.is_empty():
+		text += "\n\nCOST // ESTIMATE\nBlocking %.1fs + background %.1fs = %.1fs" % [estimate["blocking"], estimate["background"], estimate["total"]]
+		for item in estimate["items"]:
+			text += "\n  %s: %.1f / %.1f (%s%s)" % [item["key"], item["blocking"], item["background"], item["source"], "" if item["samples"] == 0 else ", n=%d" % item["samples"]]
+		if estimate["guesses"] > 0:
+			text += "\n%d of %d entries are guesses" % [estimate["guesses"], estimate["items"].size()]
+		var walk := CostTable.fit(estimate, report)
+		var hustle := CostTable.fit(estimate, report, true)
+		text += "\nFit: walk %s | hustle %s" % [_fit_text(walk), _fit_text(hustle)]
+	return text
+
+func _fit_text(result: Dictionary) -> String:
+	if result["hold_sec"] > 0.0:
+		return "%s (+%.1fs)" % [String(result["label"]).to_upper(), result["hold_sec"]]
+	return String(result["label"]).to_upper()
 
 func reload_preview() -> void:
 	load_preview(script_path)
@@ -421,6 +500,7 @@ func _update_inspector() -> void:
 	var data: SignalData = entry["data"]
 	var text := "%s\n%s\n\nCell: %.2f\nLane: %d\nSection: %s\nFacing: %.1f deg\nHorizontal dx from frozen runner: %.2f cells" % [data.system_id, SignalData.Type.keys()[data.type], entry["cell"], data.lane, entry["section"], data.facing_deg, entry["cell"] - _runner_position.x]
 	text += security_details(data)
+	text += threat_details(data)
 	if data.detection != null:
 		var d := data.detection
 		text += "\n\nVISION\nLength: %.2f cells\nAngle: %.1f deg\nWatch offset: %.2f cells\nShape: %s" % [d.vision_length_cells, d.vision_angle_deg, d.watch_offset_cells, DetectionComponent.ShapeType.keys()[d.shape_type]]
