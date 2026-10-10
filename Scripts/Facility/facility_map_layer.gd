@@ -50,7 +50,8 @@ var show_flavor_text := false
 var _font: Font = preload("res://Visuals/Fonts/ShareTechMono-Regular.ttf")
 var _clip := Rect2()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_update_flavor_tip(delta)
 	if preview_mode:
 		return # The viewer redraws only when its data or view changes.
 	visible = timeline_manager != null and timeline_manager.map_mode
@@ -116,8 +117,35 @@ const FLAVOR_TEXT_COLOR := Color(0.72, 0.76, 0.77, 0.95)
 const FLAVOR_PANEL_COLOR := Color(0.02, 0.04, 0.05, 0.9)
 const FLAVOR_TEXT_SIZE := 13
 const FLAVOR_TEXT_MAX_WIDTH := 280.0
+# Hover tooltip timing: quick fade in, short hold after the mouse leaves,
+# then a fade out.
+const FLAVOR_FADE_IN_SEC := 0.1
+const FLAVOR_HOLD_SEC := 0.35
+const FLAVOR_FADE_OUT_SEC := 0.5
 # Viewer: below this zoom, labels-on shows dots only (hover still works).
 const FLAVOR_TEXT_MIN_ZOOM := 0.45
+
+# Tooltip state: the item being shown (kept while it fades out), its alpha,
+# and how long since the mouse left it.
+var _flavor_tip: Dictionary = {}
+var _flavor_hovered: Dictionary = {}
+var _flavor_tip_alpha := 0.0
+var _flavor_tip_unhovered_sec := 0.0
+
+func _update_flavor_tip(delta: float) -> void:
+	if not _flavor_hovered.is_empty():
+		if _flavor_hovered != _flavor_tip:
+			_flavor_tip = _flavor_hovered
+			_flavor_tip_alpha = 0.0
+		_flavor_tip_unhovered_sec = 0.0
+		_flavor_tip_alpha = minf(1.0, _flavor_tip_alpha + delta / FLAVOR_FADE_IN_SEC)
+	elif not _flavor_tip.is_empty():
+		_flavor_tip_unhovered_sec += delta
+		if _flavor_tip_unhovered_sec > FLAVOR_HOLD_SEC:
+			_flavor_tip_alpha -= delta / FLAVOR_FADE_OUT_SEC
+			if _flavor_tip_alpha <= 0.0:
+				_flavor_tip = {}
+				_flavor_tip_alpha = 0.0
 
 func _visible_flavor(sections: Array[FacilitySection]) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
@@ -144,6 +172,8 @@ func _draw_flavor_models(flavor: Array[Dictionary]) -> void:
 
 func _draw_flavor(flavor: Array[Dictionary]) -> void:
 	if flavor.is_empty():
+		_flavor_hovered = {}
+		_flavor_tip = {}
 		return
 	var mouse := get_local_mouse_position()
 	var hovered := -1
@@ -160,12 +190,24 @@ func _draw_flavor(flavor: Array[Dictionary]) -> void:
 			hovered = i
 		if preview_mode and show_flavor_text and model_scale >= FLAVOR_TEXT_MIN_ZOOM:
 			_draw_flavor_text(pos, String(flavor[i]["text"]))
-	if hovered >= 0 and not (preview_mode and show_flavor_text and model_scale >= FLAVOR_TEXT_MIN_ZOOM):
-		var pos := _to_screen(float(flavor[hovered]["cell"]), float(flavor[hovered]["lane"]))
-		_draw_flavor_text(pos, String(flavor[hovered]["text"]))
+	if preview_mode and show_flavor_text and model_scale >= FLAVOR_TEXT_MIN_ZOOM:
+		return
+	_flavor_hovered = flavor[hovered] if hovered >= 0 else {}
+	if preview_mode:
+		# The viewer only redraws on input, so no timed fade there.
+		if hovered >= 0:
+			var hover_pos := _to_screen(float(flavor[hovered]["cell"]), float(flavor[hovered]["lane"]))
+			_draw_flavor_text(hover_pos, String(flavor[hovered]["text"]))
+		return
+	# Live map: show the current tooltip (fading out if no longer hovered),
+	# as long as its object is still on this feed.
+	if _flavor_tip.is_empty() or _flavor_tip_alpha <= 0.0 or not flavor.has(_flavor_tip):
+		return
+	var pos := _to_screen(float(_flavor_tip["cell"]), float(_flavor_tip["lane"]))
+	_draw_flavor_text(pos, String(_flavor_tip["text"]), _flavor_tip_alpha)
 
 # Text box just right of (or left of, near the edge) the dot.
-func _draw_flavor_text(anchor: Vector2, text: String) -> void:
+func _draw_flavor_text(anchor: Vector2, text: String, alpha: float = 1.0) -> void:
 	if text.is_empty():
 		return
 	var text_size := _font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, FLAVOR_TEXT_MAX_WIDTH, FLAVOR_TEXT_SIZE)
@@ -174,10 +216,10 @@ func _draw_flavor_text(anchor: Vector2, text: String) -> void:
 	if box.end.x > _clip.end.x:
 		box.position.x = anchor.x - 14.0 - box.size.x
 	box.position.y = clampf(box.position.y, _clip.position.y, maxf(_clip.position.y, _clip.end.y - box.size.y))
-	draw_rect(box, FLAVOR_PANEL_COLOR, true)
-	draw_rect(box, FLAVOR_RING_COLOR, false, 1.0)
+	draw_rect(box, Color(FLAVOR_PANEL_COLOR, FLAVOR_PANEL_COLOR.a * alpha), true)
+	draw_rect(box, Color(FLAVOR_RING_COLOR, FLAVOR_RING_COLOR.a * alpha), false, 1.0)
 	var ascent := _font.get_ascent(FLAVOR_TEXT_SIZE)
-	draw_multiline_string(_font, box.position + Vector2(pad.x, pad.y + ascent), text, HORIZONTAL_ALIGNMENT_LEFT, FLAVOR_TEXT_MAX_WIDTH, FLAVOR_TEXT_SIZE, -1, FLAVOR_TEXT_COLOR)
+	draw_multiline_string(_font, box.position + Vector2(pad.x, pad.y + ascent), text, HORIZONTAL_ALIGNMENT_LEFT, FLAVOR_TEXT_MAX_WIDTH, FLAVOR_TEXT_SIZE, -1, Color(FLAVOR_TEXT_COLOR, FLAVOR_TEXT_COLOR.a * alpha))
 
 # --- helpers ---
 

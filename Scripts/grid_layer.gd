@@ -17,6 +17,11 @@ var CELL_GRID_COLOR = Color(0.275, 0.699, 0.771, 0.2)
 @onready var screen_height: float = timeline_manager.screen_height
 
 
+# Strength of the floating "data block" backdrop in map mode. On the old strip
+# it sat behind mostly empty lanes; over the map it draws on top of the floors,
+# so it's toned down (the material's own value is used on the strip).
+@export_range(0.0, 0.2, 0.005) var map_data_stream_alpha: float = 0.06
+
 var time_elapsed: float = 0.0
 const RUNNER_EDGE_FADE_PX := 40.0
 
@@ -38,12 +43,30 @@ func _ready():
 func _apply_map_layout() -> void:
 	if not timeline_manager.map_mode:
 		return
+	_place_breath_over_map()
 	var map_height: float = timeline_manager.get_timeline_height()
 	for rect in _backdrop_rects:
 		if rect == null:
 			continue
 		rect.offset_right = timeline_manager.screen_width
 		rect.offset_bottom = rect.offset_top + map_height + 10.0
+
+# The breath pulse and the data stream were backdrops for the old timeline
+# strip, showing through its mostly transparent lanes. The facility map draws
+# near-opaque floors on top, which buried both, so in map mode they draw right
+# after the map, in their old relative order: map, data stream, breath (the
+# pulse warps the stream as before). Both still draw before the signals, which
+# have their own heartbeat shader.
+func _place_breath_over_map() -> void:
+	if facility_map_layer == null:
+		return
+	for node_name in ["TimelineBreathEffect", "TimelineDataStream"]:
+		var effect := get_node_or_null(node_name)
+		if effect != null and effect.get_index() < facility_map_layer.get_index():
+			move_child(effect, facility_map_layer.get_index())
+	var data_stream := get_node_or_null("TimelineDataStream") as CanvasItem
+	if data_stream != null and data_stream.material is ShaderMaterial:
+		(data_stream.material as ShaderMaterial).set_shader_parameter("overall_alpha", map_data_stream_alpha)
 
 func _has_facility_rooms() -> bool:
 	return facility_map_layer != null and facility_map_layer.has_rooms()
