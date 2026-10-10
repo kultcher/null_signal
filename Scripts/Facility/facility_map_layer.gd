@@ -34,12 +34,23 @@ const PATH_DASH_PX := 14.0
 const PATH_GAP_PX := 10.0
 const PATH_WIDTH := 2.5
 
-@onready var timeline_manager = $"../../TimelineManager"
+@export var timeline_manager_path: NodePath = ^"../../TimelineManager"
+@onready var timeline_manager = get_node(timeline_manager_path)
+
+# The debug viewer supplies an isolated projection and authored signals.
+# Defaults preserve the live feed renderer's behavior.
+var preview_mode := false
+var preview_sections: Array[FacilitySection] = []
+var preview_signals: Array[Dictionary] = []
+var draw_route := true
+var model_scale := 1.0
 
 var _font: Font = preload("res://Visuals/Fonts/ShareTechMono-Regular.ttf")
 var _clip := Rect2()
 
 func _process(_delta: float) -> void:
+	if preview_mode:
+		return # The viewer redraws only when its data or view changes.
 	visible = timeline_manager != null and timeline_manager.map_mode
 	if visible:
 		queue_redraw()
@@ -54,26 +65,39 @@ func _draw() -> void:
 		return
 
 	_clip = timeline_manager.get_map_rect()
-	var section: FacilitySection = timeline_manager.get_current_section()
+	var sections: Array[FacilitySection] = []
+	if preview_mode:
+		sections.assign(preview_sections)
+	else:
+		sections.append(timeline_manager.get_current_section())
 	var left_cell: float = timeline_manager.screen_x_to_cell(-64.0)
 	var right_cell: float = timeline_manager.screen_x_to_cell(timeline_manager.screen_width + 64.0)
 	var rooms: Array[FacilityRoom] = []
-	for room in timeline_manager.facility_layout.get_rooms_in_section(section):
-		if room.end_cell >= left_cell and room.start_cell <= right_cell:
-			rooms.append(room)
+	for section in sections:
+		for room in timeline_manager.facility_layout.get_rooms_in_section(section):
+			if room.end_cell >= left_cell and room.start_cell <= right_cell:
+				rooms.append(room)
 
 	for room in rooms:
 		_draw_floor(room, left_cell, right_cell)
 	for room in rooms:
 		_draw_props(room)
 	_draw_signal_models()
-	_draw_runner_path(section)
+	if draw_route:
+		for section in sections:
+			_draw_runner_path(section)
 	for room in rooms:
 		if not room.is_exterior():
+			var section: FacilitySection = timeline_manager.facility_layout.get_section_for_cell((room.start_cell + room.end_cell) * 0.5)
+			for candidate in sections:
+				if candidate.id == room.section_id:
+					section = candidate
+					break
 			_draw_walls(room, section)
 	for room in rooms:
 		_draw_label(room)
-	_draw_feed_label(section)
+	if not preview_mode:
+		_draw_feed_label(sections[0])
 
 # --- helpers ---
 
@@ -205,6 +229,15 @@ func _draw_props(room: FacilityRoom) -> void:
 
 # Hardware under signals (valves, fabricators, consoles...), sized by the model.
 func _draw_signal_models() -> void:
+	if preview_mode:
+		for entry in preview_signals:
+			var model := WireframeModels.get_model(WireframeModels.model_for_signal(entry["data"]))
+			if model.is_empty():
+				continue
+			var size: Vector2 = model["size"] * model_scale
+			var center := _to_screen(entry["cell"], entry["data"].lane)
+			_draw_model(model, Rect2(center - size * 0.5, size))
+		return
 	var signal_manager = CommandDispatch.signal_manager
 	if signal_manager == null or not signal_manager.visible:
 		return
@@ -261,10 +294,10 @@ func _draw_model(model: Dictionary, rect: Rect2, tint: Color = Color.WHITE, rot:
 				_line(_project(rect, a2, a3.z), _project(rect, b2, b3.z), top, 1.2)
 
 func _project(rect: Rect2, normalized: Vector2, z: float) -> Vector2:
-	return rect.position + (normalized * rect.size) + (WireframeModels.HEIGHT_PROJECTION * z)
+	return rect.position + (normalized * rect.size) + (WireframeModels.HEIGHT_PROJECTION * z * model_scale)
 
 func _draw_circle_at(rect: Rect2, normalized_center: Vector2, radius: float, z: float, color: Color, width: float) -> void:
-	var center := _project(rect, normalized_center, 0.0) + (WireframeModels.HEIGHT_PROJECTION * z)
+	var center := _project(rect, normalized_center, 0.0) + (WireframeModels.HEIGHT_PROJECTION * z * model_scale)
 	var prev := center + Vector2(radius, 0.0)
 	for i in range(1, MODEL_CIRCLE_SEGMENTS + 1):
 		var angle := TAU * float(i) / float(MODEL_CIRCLE_SEGMENTS)
@@ -351,7 +384,7 @@ func _draw_runner_path(section: FacilitySection) -> void:
 		screen_points.append(_to_screen(point.x, point.y))
 
 	# Split the route at the runner: dim behind, bright ahead.
-	var runner_local: float = timeline_manager.path_progress - section.progress_start
+	var runner_local: float = -1.0 if preview_mode else timeline_manager.path_progress - section.progress_start
 	var behind := PackedVector2Array([screen_points[0]])
 	var ahead := PackedVector2Array()
 	var walked := 0.0

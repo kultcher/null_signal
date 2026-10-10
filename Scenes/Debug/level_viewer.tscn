@@ -1,0 +1,229 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Debug/level_viewer.gd" id="1"]
+[ext_resource type="Script" path="res://Scripts/Facility/facility_map_layer.gd" id="2"]
+[ext_resource type="Script" path="res://Scripts/Debug/level_viewer_overlay.gd" id="3"]
+[ext_resource type="FontFile" path="res://Visuals/Fonts/ShareTechMono-Regular.ttf" id="4"]
+
+[sub_resource type="StyleBoxFlat" id="PanelStyle"]
+bg_color = Color(0.025, 0.055, 0.07, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.48, 0.52, 1)
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="ButtonStyle"]
+bg_color = Color(0.06, 0.13, 0.16, 1)
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+
+[sub_resource type="Theme" id="ViewerTheme"]
+default_font = ExtResource("4")
+default_font_size = 18
+Label/colors/font_color = Color(0.65, 0.9, 0.95, 1)
+Button/styles/normal = SubResource("ButtonStyle")
+Button/styles/hover = SubResource("ButtonStyle")
+Button/styles/pressed = SubResource("ButtonStyle")
+PanelContainer/styles/panel = SubResource("PanelStyle")
+
+[node name="LevelViewer" type="CanvasLayer"]
+process_mode = 3
+layer = 120
+script = ExtResource("1")
+
+[node name="Panel" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("ViewerTheme")
+
+[node name="Background" type="ColorRect" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.012, 0.025, 0.035, 1)
+
+[node name="Header" type="VBoxContainer" parent="Panel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 16.0
+offset_right = 1896.0
+offset_bottom = 135.0
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Panel/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "LEVEL VIEWER // DISTANCE & PLACEMENT"
+
+[node name="Controls" type="HBoxContainer" parent="Panel/Header"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Run" type="OptionButton" parent="Panel/Header/Controls"]
+layout_mode = 2
+focus_mode = 0
+custom_minimum_size = Vector2(240, 0)
+
+[node name="Section" type="OptionButton" parent="Panel/Header/Controls"]
+layout_mode = 2
+focus_mode = 0
+custom_minimum_size = Vector2(240, 0)
+
+[node name="FitSection" type="Button" parent="Panel/Header/Controls"]
+layout_mode = 2
+focus_mode = 0
+text = "Fit section [Home]"
+
+[node name="FitLevel" type="Button" parent="Panel/Header/Controls"]
+layout_mode = 2
+focus_mode = 0
+text = "Fit level [Shift+Home]"
+
+[node name="Reload" type="Button" parent="Panel/Header/Controls"]
+layout_mode = 2
+focus_mode = 0
+text = "Reload [R]"
+
+[node name="Close" type="Button" parent="Panel/Header/Controls"]
+layout_mode = 2
+focus_mode = 0
+text = "Return to game [F2]"
+
+[node name="Overlays" type="HBoxContainer" parent="Panel/Header"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Distance" type="CheckButton" parent="Panel/Header/Overlays"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Distance grid"
+
+[node name="Route" type="CheckButton" parent="Panel/Header/Overlays"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Route"
+
+[node name="Vision" type="CheckButton" parent="Panel/Header/Overlays"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Vision"
+
+[node name="Patrols" type="CheckButton" parent="Panel/Header/Overlays"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Patrols"
+
+[node name="Boundaries" type="CheckButton" parent="Panel/Header/Overlays"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Sections"
+
+[node name="Labels" type="CheckButton" parent="Panel/Header/Overlays"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Signal labels"
+
+[node name="MapView" type="Control" parent="Panel"]
+clip_contents = true
+layout_mode = 1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 156.0
+offset_right = -368.0
+offset_bottom = -100.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="Panel/MapView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.023, 0.047, 0.06, 1)
+
+[node name="FacilityMap" type="Node2D" parent="Panel/MapView"]
+script = ExtResource("2")
+timeline_manager_path = NodePath("../../..")
+
+[node name="Overlay" type="Node2D" parent="Panel/MapView"]
+script = ExtResource("3")
+
+[node name="Inspector" type="PanelContainer" parent="Panel"]
+layout_mode = 1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -344.0
+offset_top = 156.0
+offset_right = -24.0
+offset_bottom = -100.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Inspector"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Details" type="Label" parent="Panel/Inspector/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "Click a signal to inspect."
+autowrap_mode = 2
+
+[node name="Coordinates" type="Label" parent="Panel"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -88.0
+offset_right = 1850.0
+offset_bottom = -65.0
+text = "X = CELLS | Y = LANES | Shift-click two points to measure"
+
+[node name="Status" type="Label" parent="Panel"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -62.0
+offset_right = 1896.0
+offset_bottom = -39.0
+theme_override_font_sizes/font_size = 16
+
+[node name="Help" type="Label" parent="Panel"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -36.0
+offset_right = 1850.0
+offset_bottom = -13.0
+theme_override_font_sizes/font_size = 16
+text = "Middle-drag: pan | Wheel: zoom at cursor | Click: inspect | Shift-click: ruler A/B | Delete: clear ruler | PgUp/PgDn: sections | Esc: close"
