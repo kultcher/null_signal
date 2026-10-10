@@ -38,12 +38,26 @@ func _ready():
 func _apply_map_layout() -> void:
 	if not timeline_manager.map_mode:
 		return
+	_place_breath_over_map()
 	var map_height: float = timeline_manager.get_timeline_height()
 	for rect in _backdrop_rects:
 		if rect == null:
 			continue
 		rect.offset_right = timeline_manager.screen_width
 		rect.offset_bottom = rect.offset_top + map_height + 10.0
+
+# The breath pulse is a screen-space shader: it warps and brightens whatever has
+# already been drawn beneath it. On the old timeline strip that was the
+# backdrop, which showed through the mostly transparent lanes. The facility
+# map draws near-opaque floors on top, which buried the pulse, so in map mode
+# draw it right after the map (it still draws before the signals, which have
+# their own heartbeat shader).
+func _place_breath_over_map() -> void:
+	var breath := get_node_or_null("TimelineBreathEffect")
+	if breath == null or facility_map_layer == null:
+		return
+	if breath.get_index() < facility_map_layer.get_index():
+		move_child(breath, facility_map_layer.get_index())
 
 func _has_facility_rooms() -> bool:
 	return facility_map_layer != null and facility_map_layer.has_rooms()
