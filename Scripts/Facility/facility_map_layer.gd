@@ -196,7 +196,7 @@ func _draw_props(room: FacilityRoom) -> void:
 			_rect(screen_rect, PROP_FILL_COLOR)
 			_rect(screen_rect, PROP_EDGE_COLOR, false, 1.5)
 		else:
-			_draw_model(model, screen_rect)
+			_draw_model(model, screen_rect, Color.WHITE, int(prop.get("rot", 0)))
 		var prop_label: String = prop.get("label", "")
 		if not prop_label.is_empty() and screen_rect.size.x > 40.0:
 			_text(screen_rect.position + Vector2(6, 14), prop_label, screen_rect.size.x - 12.0, 11, PROP_LABEL_COLOR)
@@ -220,7 +220,9 @@ func _draw_signal_models() -> void:
 		_draw_model(model, Rect2(center - size * 0.5, size), tint)
 
 # Draws a model's parts fitted to `rect` (its footprint on the floor).
-func _draw_model(model: Dictionary, rect: Rect2, tint: Color = Color.WHITE) -> void:
+# `rot` turns the model by quarter turns clockwise; `rect` is the footprint
+# after rotation.
+func _draw_model(model: Dictionary, rect: Rect2, tint: Color = Color.WHITE, rot: int = 0) -> void:
 	_rect(rect, MODEL_SHADOW_COLOR * Color(1, 1, 1, tint.a))
 	var edge := MODEL_EDGE_COLOR * tint
 	var top := MODEL_TOP_COLOR * tint
@@ -228,7 +230,7 @@ func _draw_model(model: Dictionary, rect: Rect2, tint: Color = Color.WHITE) -> v
 	for part in model["parts"]:
 		match part["t"]:
 			"box":
-				var r: Rect2 = part["r"]
+				var r: Rect2 = WireframeModels.rotate_rect(part["r"], rot)
 				var z: Vector2 = part["z"]
 				var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
 				for i in 4:
@@ -238,7 +240,7 @@ func _draw_model(model: Dictionary, rect: Rect2, tint: Color = Color.WHITE) -> v
 					_line(_project(rect, a, z.y), _project(rect, b, z.y), top, 1.4)
 					_line(_project(rect, a, z.x), _project(rect, a, z.y), edge, 1.0)
 			"cyl":
-				var c: Vector2 = part["c"]
+				var c: Vector2 = WireframeModels.rotate_point(part["c"], rot)
 				var radius: float = part["rad"] * unit
 				var z: Vector2 = part["z"]
 				_draw_circle_at(rect, c, radius, z.x, edge, 1.0)
@@ -250,11 +252,13 @@ func _draw_model(model: Dictionary, rect: Rect2, tint: Color = Color.WHITE) -> v
 					var tip: Vector2 = _project(rect, c, z.y) + side * side_sign
 					_line(base, tip, edge, 1.0)
 			"ring":
-				_draw_circle_at(rect, part["c"], part["rad"] * unit, part["z"], top, 1.4)
+				_draw_circle_at(rect, WireframeModels.rotate_point(part["c"], rot), part["rad"] * unit, part["z"], top, 1.4)
 			"line":
 				var a3: Vector3 = part["a"]
 				var b3: Vector3 = part["b"]
-				_line(_project(rect, Vector2(a3.x, a3.y), a3.z), _project(rect, Vector2(b3.x, b3.y), b3.z), top, 1.2)
+				var a2 := WireframeModels.rotate_point(Vector2(a3.x, a3.y), rot)
+				var b2 := WireframeModels.rotate_point(Vector2(b3.x, b3.y), rot)
+				_line(_project(rect, a2, a3.z), _project(rect, b2, b3.z), top, 1.2)
 
 func _project(rect: Rect2, normalized: Vector2, z: float) -> Vector2:
 	return rect.position + (normalized * rect.size) + (WireframeModels.HEIGHT_PROJECTION * z)
@@ -329,7 +333,8 @@ func _draw_feed_label(section: FacilitySection) -> void:
 	var sections: Array[FacilitySection] = timeline_manager.facility_layout.sections
 	if sections.size() <= 1:
 		return
-	var text := "FEED %02d // %s" % [sections.find(section) + 1, section.label]
+	# Relay mesh zone currently mapped (see feed_switch_overlay.gd).
+	var text := "MESH %02d // %s" % [sections.find(section) + 1, section.label]
 	var text_size := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 	var pos := Vector2(_clip.end.x - text_size.x - 16.0, _clip.position.y + 22.0)
 	draw_rect(Rect2(pos + Vector2(-8.0, -16.0), text_size + Vector2(16.0, 8.0)), Color(0.0, 0.0, 0.0, 0.75), true)

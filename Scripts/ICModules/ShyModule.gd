@@ -30,10 +30,15 @@ func apply_params(params: Dictionary) -> void:
 
 func on_initialized(active_sig: ActiveSignal) -> void:
 	_host = weakref(active_sig)
+
+# Scans can only happen while the signal is on screen, so the scan listener
+# lives as long as the signal's visuals. That also drops it when the run is
+# torn down (signal_entity._exit_tree clears visuals), so modules from old
+# runs don't keep reacting to new scans.
+func on_visuals_ready(active_sig: ActiveSignal, ic_effects: ICEffectsHost, module_index: int) -> void:
+	_host = weakref(active_sig)
 	if not GlobalEvents.signal_scan_complete.is_connected(_on_signal_scan_complete):
 		GlobalEvents.signal_scan_complete.connect(_on_signal_scan_complete)
-
-func on_visuals_ready(active_sig: ActiveSignal, ic_effects: ICEffectsHost, module_index: int) -> void:
 	var effect_instance := _effect_scene.instantiate() as ICProgressRadial
 	if effect_instance == null:
 		return
@@ -51,6 +56,8 @@ func on_visuals_ready(active_sig: ActiveSignal, ic_effects: ICEffectsHost, modul
 
 func on_visuals_cleared(_active_sig: ActiveSignal) -> void:
 	effect_node = null
+	if GlobalEvents.signal_scan_complete.is_connected(_on_signal_scan_complete):
+		GlobalEvents.signal_scan_complete.disconnect(_on_signal_scan_complete)
 
 func get_connection_flow_lines(_active_sig: ActiveSignal) -> Array[String]:
 	return ["[b][color=red]SHY[/color][/b]: Telemetry scrubbing scheduled after inspection."]

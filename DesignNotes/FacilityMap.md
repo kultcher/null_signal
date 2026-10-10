@@ -80,22 +80,45 @@ func get_rooms() -> Array[FacilityRoom]:
 - Decorative rooms can extend past the map edges; drawing is clipped.
 - `.exterior()` draws an open area with no walls.
 
-### Wireframe objects
+### Prop library (wireframe objects)
 
-`Scripts/Facility/WireframeModels.gd` holds simple wireframe models drawn with
-an oblique projection so they read as 3D (van, guard_booth, reception, lockers,
-carts, decon_shower, charging_rack, plinth, coolant_valve, nanofab,
-breaker_panel, console, interface_rig).
+`Scripts/Facility/WireframeModels.gd` is the prop library: every physical
+object on the map (set dressing and signal hardware) is defined there once
+and reused. Models are drawn with an oblique projection so they read as 3D.
+The header of that file lists the full catalogue; `PropGalleryRun.gd` lays
+every model out in-game for a quick look.
 
-- Props: pass a model as the last argument, and it's drawn fitted to the prop
-  rect: `.prop(0.2, 1.6, 3.3, 4.6, "", &"van")`. Without a model a prop is a flat
-  floor marking.
+Placing props in a room:
+
+```gdscript
+room("parking_b2", -1.0, 13.4) \
+	.place(&"ticket_booth", -0.5, 1.0) \
+	.row(&"car", 1.4, 10.8, 0.5, 19, 3, [3, 8]) \
+	.prop(19.9, 22.0, 0.75, 2.95, "", &"meeting_pod") \
+	.prop(31.0, 33.8, 1.45, 3.0, "BREAK AREA") \
+	.build()
+```
+
+- `place(model, cell, lane, rot, label)`: library prop at its default
+  footprint, centred on (cell, lane).
+- `row(model, from_cell, to_cell, lane, count, rot, skip)`: `count` copies
+  spaced evenly (centres at the ends); indices in `skip` are left empty
+  (e.g. 19 cars facing up with bays 3 and 8 open, above).
+- `prop(...)` still takes an explicit rect; models stretch to fit. With no
+  model it's a flat floor marking (zones, painted logos).
+- `rot` is quarter turns clockwise: 0 = as authored (vehicles/furniture face
+  right), 1 = down, 2 = left, 3 = up.
+- Comments can't sit inside a `\`-continued builder chain; put them above.
 - Signals: hardware is drawn under the signal icon. Set it explicitly with
-  `spawn(...).model(&"nanofab")`, or let it be inferred from the id prefix
-  (`coolant_vent_*`, `nano_fabricator_*`, `breaker_panel_*`, terminals; see
-  `SIGNAL_MODEL_BY_PREFIX`). Disabled signals draw dimmed.
-- A model is a footprint plus parts: `_box`, `_cyl`, `_ring`, `_seg`, with x/y
-  normalized to the footprint and heights in pixels.
+  `spawn(...).model(&"forklift")`, or let it be inferred from the id prefix
+  (`printer_*`, `coffee_*`, `car_alarm_*`, `cleaning_bot_*`, `coolant_vent_*`,
+  ...; see `SIGNAL_MODEL_BY_PREFIX`). Disabled signals draw dimmed.
+
+Adding a model: one `_add(&"name", size_px, parts)` call in the matching
+`_build_*` group. Parts are `_box`, `_cyl`, `_ring`, `_seg`, with x/y
+normalized to the footprint and heights in pixels. Rough scale: ~40 px per
+metre on the floor (a cell is 240 px, a lane 90 px), heights stylised at
+~20 px per metre.
 
 ### Escalation
 

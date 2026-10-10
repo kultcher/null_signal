@@ -159,13 +159,33 @@ class RoomBuilder extends RefCounted:
 
 	# Visual-only furniture. Rect is in cells (x) and lanes (y).
 	# Optional `model` names a WireframeModels entry drawn fitted to the rect;
-	# without one the prop is a flat floor marking.
-	func prop(from_cell: float, to_cell: float, lane_top: float, lane_bottom: float, prop_label: String = "", model: StringName = &"") -> RoomBuilder:
+	# without one the prop is a flat floor marking (good for painted floor
+	# logos, bay markings and zone labels). `rot` turns the model by quarter
+	# turns clockwise inside the rect.
+	func prop(from_cell: float, to_cell: float, lane_top: float, lane_bottom: float, prop_label: String = "", model: StringName = &"", rot: int = 0) -> RoomBuilder:
 		_room.props.append({
 			"rect": Rect2(from_cell, lane_top, to_cell - from_cell, lane_bottom - lane_top),
 			"label": prop_label,
 			"model": model,
+			"rot": rot,
 		})
+		return self
+
+	# Library prop at its default size, centred on (cell, lane).
+	# rot: 0 = as authored (front faces right), 1 = down, 2 = left, 3 = up.
+	func place(model: StringName, cell: float, lane: float, rot: int = 0, prop_label: String = "") -> RoomBuilder:
+		var size := WireframeModels.get_footprint_cells(model, rot)
+		return prop(cell - size.x * 0.5, cell + size.x * 0.5, lane - size.y * 0.5, lane + size.y * 0.5, prop_label, model, rot)
+
+	# `count` copies of a library prop spaced evenly from from_cell to to_cell
+	# (centres) along one lane, e.g. a row of parked cars or desks. Indices in
+	# `skip` are left empty (an open parking bay, a missing desk).
+	func row(model: StringName, from_cell: float, to_cell: float, lane: float, count: int, rot: int = 0, skip: Array = []) -> RoomBuilder:
+		for i in count:
+			if i in skip:
+				continue
+			var t := 0.0 if count <= 1 else float(i) / float(count - 1)
+			place(model, lerpf(from_cell, to_cell, t), lane, rot)
 		return self
 
 	# Draw this room in a specific feed section (e.g. a decorative stub that

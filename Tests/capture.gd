@@ -24,6 +24,8 @@ func _ready() -> void:
 		elif a.begins_with("shots="):
 			shots = int(a.substr(6))
 	var run_main: Node = load("res://Scenes/run_main.tscn").instantiate()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("level="): run_main.get_node("RunManager").level_script_path = a.substr(6)
 	var tm_node := run_main.get_node("TutorialManager")
 	if stage == "":
 		tm_node.set_script(null)

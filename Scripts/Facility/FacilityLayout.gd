@@ -47,6 +47,35 @@ func set_lane_to_cell_scale(scale: float) -> void:
 	lane_to_cell_scale = scale
 	_recompute_lengths()
 
+# Where `progress` falls on the route, independent of the lane scale:
+# {section, segment, t}. Used to keep the runner in place when the scale (and
+# so every diagonal/vertical segment length) changes.
+func locate_progress(progress: float) -> Dictionary:
+	var section_index := get_section_index_for_progress(progress)
+	var section: FacilitySection = sections[section_index]
+	var points := section.path_points
+	var remaining := maxf(0.0, progress - section.progress_start)
+	for i in range(points.size() - 1):
+		var seg_len := segment_length(points[i], points[i + 1])
+		if remaining <= seg_len or i == points.size() - 2:
+			var t := 0.0 if seg_len <= 0.0 else clampf(remaining / seg_len, 0.0, 1.0)
+			return {"section": section_index, "segment": i, "t": t}
+		remaining -= seg_len
+	return {"section": section_index, "segment": 0, "t": 0.0}
+
+# Inverse of locate_progress() under the current scale.
+func progress_from_location(location: Dictionary) -> float:
+	var section_index := clampi(int(location.get("section", 0)), 0, sections.size() - 1)
+	var section: FacilitySection = sections[section_index]
+	var points := section.path_points
+	var segment := int(location.get("segment", 0))
+	var progress := section.progress_start
+	for i in range(mini(segment, points.size() - 1)):
+		progress += segment_length(points[i], points[i + 1])
+	if segment < points.size() - 1:
+		progress += segment_length(points[segment], points[segment + 1]) * float(location.get("t", 0.0))
+	return progress
+
 func has_rooms() -> bool:
 	return not rooms.is_empty()
 
