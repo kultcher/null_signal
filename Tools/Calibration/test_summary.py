@@ -69,6 +69,57 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(report["incomplete_trials"], 1)
         self.assertEqual(report["groups"], [])
 
+    def connection_trial(self, trial, config, ready=True):
+        common = {"session": "mixed", "trial": trial, "tester": "alice", "skill": "novice"}
+        phases = [("signal_visible", 0), ("scan_started", 1), ("scan_complete", 2),
+                  ("connected", 2)]
+        if ready:
+            phases.append(("connection_ready", 3))
+        phases.append(("command_started", 5))
+        if any(module["ic"] == "callback" for module in config["ic"]):
+            phases.append(("ic_neutralized", 7))
+        events = [{**common, "event": name, "t": when, "wall_t": when,
+                   "ic": "callback", "difficulty": 2} for name, when in phases]
+        events.append({**common, "event": "trial_ended", "t": 8, "wall_t": 8,
+                       "outcome": "success", "case_key": str(config), "config": config,
+                       "interaction_to_clear_sec": 7, "visible_to_clear_sec": 8})
+        return events
+
+    def test_mixed_matrix_updates_base_only_from_baselines(self):
+        baseline = {"puzzle": "none", "difficulty": 0, "ic": [], "runner_speed": .15}
+        puzzle = {**baseline, "puzzle": "sniff", "difficulty": 2}
+        callback = {**baseline, "ic": [{"ic": "callback", "difficulty": 2}]}
+        events = []
+        for index, config in enumerate([baseline, puzzle, callback] * 5):
+            events += self.connection_trial(index + 1, config)
+        report = self.report(events)
+        table = candidate_table({"version": 1, "base": {}}, report, 5)
+        for key, value in [("notice", 1), ("connect", 1), ("command", 2)]:
+            self.assertEqual(table["base"][key]["source"], "telemetry")
+            self.assertEqual(table["base"][key]["samples"], 5)
+            self.assertEqual(table["base"][key]["blocking"], value)
+        # Callback begins after the reveal, so it does not include connect.
+        self.assertEqual(table["ic"]["callback"]["2"]["blocking"], 4)
+
+    def test_legacy_connection_logs_do_not_double_count_reveal(self):
+        baseline = {"puzzle": "none", "difficulty": 0, "ic": []}
+        callback = {**baseline, "ic": [{"ic": "callback", "difficulty": 2}]}
+        report = self.report(self.connection_trial(1, baseline, ready=False)
+                             + self.connection_trial(2, callback, ready=False))
+        keys = {row["key"] for row in report["components"]}
+        self.assertNotIn("base.connect", keys)
+        self.assertNotIn("base.command", keys)
+        self.assertNotIn("ic.callback.2", keys)
+        self.assertEqual(len(report["warnings"]), 2)
+
+    def test_different_baseline_tuning_is_still_kept_separate(self):
+        one = {"puzzle": "none", "difficulty": 0, "ic": [], "runner_speed": .15}
+        two = {**one, "runner_speed": .3}
+        report = self.report(self.connection_trial(1, one) + self.connection_trial(2, two))
+        table = {"version": 1, "base": {"command": {"blocking": 9, "source": "guess"}}}
+        candidate = candidate_table(table, report, 1)
+        self.assertEqual(candidate["base"]["command"], table["base"]["command"])
+
 
 if __name__ == "__main__":
     unittest.main()

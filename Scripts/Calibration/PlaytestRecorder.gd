@@ -54,6 +54,7 @@ func _ready() -> void:
 	GlobalEvents.program_executed.connect(_program_executed)
 	if CommandDispatch.terminal_window != null:
 		CommandDispatch.terminal_window.session_closed.connect(_session_closed)
+		CommandDispatch.terminal_window.connection_ready.connect(func(sig: ActiveSignal): observe(sig, "connection_ready"))
 	if auto_record_visible_signals:
 		var manager = CommandDispatch.timeline_manager.get_node_or_null("../../RunManager") if CommandDispatch.timeline_manager != null else null
 		var name := String(manager.current_run.get_run_id()) if manager != null and manager.current_run != null else "normal_play"

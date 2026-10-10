@@ -97,14 +97,19 @@ def summarize(paths, tester=None, skill=None):
             continue
         clock = lambda event: float(event.get("wall_t", event["t"]))
         blocking, scans = [], []
-        opened, scan_start, connected, visible = None, None, None, None
+        opened, scan_start, connected, ready, visible = None, None, None, None, None
         puzzle = config.get("puzzle", "none")
         modules = config.get("ic", [])
+        baseline_trial = puzzle == "none" and not modules
         isolated = (puzzle != "none" and not modules) or (puzzle == "none" and len(modules) == 1) or (puzzle == "none" and not modules)
         def sample(component, duration, channel="blocking"):
-            if isolated and duration >= 0:
+            # Base costs belong to unprotected trials. A puzzle/IC can change
+            # notice and reading time and must not fragment or bias the base.
+            if isolated and duration >= 0 and (not component.startswith("base.") or baseline_trial):
                 components[(component, signature, channel)].append(duration)
         first_command = False
+        first_connection = False
+        saw_ready = False
         for event in events:
             name, when = event["event"], clock(event)
             if name == "signal_visible":
@@ -117,13 +122,19 @@ def summarize(paths, tester=None, skill=None):
             elif name in {"scan_complete", "scan_cancelled"} and scan_start is not None:
                 scans.append((scan_start, when))
                 scan_start = None
-            elif name == "connected" and connected is None:
+            elif name == "connected":
                 connected = when
-            elif name == "command_started" and connected is not None and not first_command:
-                # Connection-to-first-command includes reading and deciding;
-                # don't double count Callback response as base command work.
-                if not any(module["ic"] == "callback" for module in modules):
-                    sample("base.command", when - connected)
+                ready = None
+            elif name == "disconnected":
+                connected, ready = None, None
+            elif name == "connection_ready" and connected is not None:
+                ready = when
+                saw_ready = True
+                if not first_connection:
+                    sample("base.connect", when - connected)
+                    first_connection = True
+            elif name == "command_started" and ready is not None and not first_command:
+                sample("base.command", when - ready)
                 first_command = True
             elif name == "puzzle_opened":
                 opened = when
@@ -134,9 +145,11 @@ def summarize(paths, tester=None, skill=None):
             elif name == "puzzle_closed" and opened is not None:
                 blocking.append((opened, when))
                 opened = None
-            elif name == "ic_neutralized" and event.get("ic") == "callback" and connected is not None:
-                sample(f"ic.callback.{event['difficulty']}", when - connected)
-                blocking.append((connected, when))
+            elif name == "ic_neutralized" and event.get("ic") == "callback" and ready is not None:
+                sample(f"ic.callback.{event['difficulty']}", when - ready)
+                blocking.append((ready, when))
+        if not saw_ready and (baseline_trial or any(module["ic"] == "callback" for module in modules)):
+            warnings.append(f"{result['session']} trial {result['trial']}: missing connection_ready; connect, command and Callback cost samples excluded")
         scan_duration = sum(b - a for a, b in scans)
         scan_background = sum((b - a) - overlap(a, b, blocking) for a, b in scans)
         group.setdefault("scan", []).append(scan_duration)
@@ -167,7 +180,7 @@ def summarize(paths, tester=None, skill=None):
         delta = row["duration"] - row["scan"] - median([item["duration"] - item["scan"] for item in base])
         overhead[(key, tuning_signature(result["config"]))].append(delta)
     overhead_rows = [{"key": key[0], "signature": key[1], "classification": "unattributed_baseline_delta", **stats(values)} for key, values in sorted(overhead.items())]
-    return {"version": 1, "sessions": len(sessions), "incomplete_trials": len(incomplete), "groups": group_rows, "components": component_rows, "ic_overhead": overhead_rows, "warnings": warnings, "notes": ["Clear percentiles include successful trials only; consult breach counts and failure elapsed times for censoring.", "Component samples use unassisted successful isolated trials. Keep tester/skill filters consistent.", "Puzzle open-to-solve and Callback response are observed elapsed times, classified as blocking per ThreatAndCost; they are not measured cognitive attention.", "IC baseline deltas are descriptive overhead and are not automatically assigned to blocking/background.", "Same difficulty can have multiple tuning signatures; candidates require a single signature per component."]}
+    return {"version": 1, "sessions": len(sessions), "incomplete_trials": len(incomplete), "groups": group_rows, "components": component_rows, "ic_overhead": overhead_rows, "warnings": warnings, "notes": ["Clear percentiles include successful trials only; consult breach counts and failure elapsed times for censoring.", "Component samples use unassisted successful isolated trials. Base costs use unprotected baselines only. Keep tester/skill filters consistent.", "Connect ends at connection_ready; command and Callback timing start there, excluding connection reveal time.", "Puzzle open-to-solve and Callback response are observed elapsed times, classified as blocking per ThreatAndCost; they are not measured cognitive attention.", "IC baseline deltas are descriptive overhead and are not automatically assigned to blocking/background.", "Same difficulty can have multiple tuning signatures; candidates require a single signature per component."]}
 
 
 def candidate_table(table, report, min_samples):
