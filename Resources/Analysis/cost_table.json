@@ -1,0 +1,47 @@
+{
+	"version": 1,
+	"notes": "Time cost per obstacle component, in seconds. blocking = runner (or player attention) must wait; background = can overlap with other work. source is guess until telemetry replaces it (see DesignNotes/ThreatAndCost.md).",
+	"base": {
+		"scan_identity": {"blocking": 0.0, "background": 0.25, "source": "code", "samples": 0, "notes": "IDENTITY layer, 0.25s"},
+		"scan_access": {"blocking": 0.0, "background": 0.5, "source": "code", "samples": 0, "notes": "ACCESS layer, 0.5s"},
+		"scan_ic_layer": {"blocking": 0.0, "background": 0.5, "source": "code", "samples": 0, "notes": "per IC module (or IC: None), 0.5s each"},
+		"connect": {"blocking": 0.5, "background": 0.0, "source": "guess", "samples": 0, "notes": "click to connect and read the panel"},
+		"command": {"blocking": 1.0, "background": 0.0, "source": "guess", "samples": 0, "notes": "pick and fire one command"},
+		"notice": {"blocking": 1.5, "background": 0.0, "source": "guess", "samples": 0, "notes": "player spots the signal and decides to engage"}
+	},
+	"puzzles": {
+		"sniff": {
+			"1": {"blocking": 4.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"2": {"blocking": 6.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"3": {"blocking": 9.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"4": {"blocking": 12.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""}
+		},
+		"decrypt": {
+			"1": {"blocking": 5.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"2": {"blocking": 8.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"3": {"blocking": 12.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"4": {"blocking": 16.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""}
+		},
+		"fuzz": {
+			"1": {"blocking": 4.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"2": {"blocking": 7.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"3": {"blocking": 10.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+			"4": {"blocking": 14.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""}
+		}
+	},
+	"ic": {
+		"bouncer": {"blocking": 1.0, "background": 0.0, "source": "guess", "samples": 0, "notes": "kicks you after N s; mostly a deadline on other work"},
+		"callback": {"blocking": 3.0, "background": 0.0, "source": "guess", "samples": 0, "notes": "sequence to answer"},
+		"faraday": {"blocking": 2.0, "background": 0.0, "source": "guess", "samples": 0, "notes": "runner must stay close; often forces a hold"},
+		"haze": {"blocking": 0.0, "background": 1.5, "source": "guess", "samples": 0, "notes": "slows scans; scales scan time"},
+		"trace": {"blocking": 2.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+		"reboot": {"blocking": 0.0, "background": 4.0, "source": "guess", "samples": 0, "notes": "device comes back; re-solve or outrun"},
+		"tripwire": {"blocking": 1.5, "background": 0.0, "source": "guess", "samples": 0, "notes": "care about command order"},
+		"siphon": {"blocking": 0.0, "background": 2.0, "source": "guess", "samples": 0, "notes": "RAM drain while connected"},
+		"heartbeat": {"blocking": 1.0, "background": 2.0, "source": "guess", "samples": 0, "notes": "keep alive or eat tamper heat"},
+		"tether": {"blocking": 2.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+		"shy": {"blocking": 1.5, "background": 0.0, "source": "guess", "samples": 0, "notes": ""},
+		"necromancer": {"blocking": 3.0, "background": 0.0, "source": "guess", "samples": 0, "notes": ""}
+	},
+	"unknown": {"blocking": 3.0, "background": 0.0, "source": "guess", "samples": 0, "notes": "fallback for anything not in the table"}
+}
