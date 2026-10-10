@@ -403,8 +403,11 @@ static func _build_sniff_hint_line(puzzle: PuzzleComponent) -> String:
 		axis
 	]
 
-static func _build_fuzz_hint_line(_puzzle: PuzzleComponent) -> String:
-	return "Fault profile: VOLATILE | Patch state: DRIFTING | Tolerance: LOW"
+static func _build_fuzz_hint_line(puzzle: PuzzleComponent) -> String:
+	var config := puzzle.get_fuzz_config()
+	if config == null:
+		return "Fault profile: UNKNOWN"
+	return "Fault profile: ANGULAR | Probe budget: %d packets | Recovery: %.1f/s" % [config.max_ammo, config.regeneration_per_second]
 
 static func _dedupe_lines(lines: Array[String]) -> Array[String]:
 	var seen: Dictionary = {}

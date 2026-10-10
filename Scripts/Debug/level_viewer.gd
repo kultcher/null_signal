@@ -437,10 +437,13 @@ func security_details(data: SignalData) -> String:
 		text += "\nPuzzle: %s\nStatus: %s\nDifficulty: %d (%s)" % [PuzzleComponent.Type.keys()[puzzle.puzzle_type], "Locked" if puzzle.is_locked() else "Open", puzzle.difficulty, "scales with escalation" if puzzle.uses_escalation_difficulty else "fixed"]
 		var sniff := puzzle.get_sniff_config()
 		var decrypt := puzzle.get_decrypt_config()
+		var fuzz := puzzle.get_fuzz_config()
 		if sniff != null:
 			text += "\nGrid: %d x %d\nTargets: %d\nScroll speed: %.1f" % [sniff.grid_cols, sniff.grid_rows, sniff.target_count, sniff.base_speed]
 		elif decrypt != null:
 			text += "\nCipher: %s\nKeyspace: %d..%d" % [DecryptPuzzleConfig.Cipher.keys()[decrypt.cipher], decrypt.keyspace_min, decrypt.keyspace_max]
+		elif fuzz != null:
+			text += "\nPackets: %d / %d\nRegen: %.2f/s\nFlight: %.2fs\nSweet arc: %.1f deg\nTarget: %.1f points\nDirect hit: %.1f points\nFalloff: %.1f / %.1f deg\nDecay: %.2f/s" % [fuzz.starting_ammo, fuzz.max_ammo, fuzz.regeneration_per_second, fuzz.flight_time_sec, fuzz.sweet_spot_arc_deg, fuzz.target_points, fuzz.direct_hit_points, fuzz.falloff_points, fuzz.falloff_step_deg, fuzz.decay_points_per_second]
 	if data.ic_modules == null or data.ic_modules.modules.is_empty():
 		return text + "\nIC: None"
 	text += "\n\nIC // CONFIGURED"
