@@ -26,6 +26,7 @@ func on_detection(active_sig: ActiveSignal, delta: float, delay: float = 0.0) ->
 func _start_delay_window(active_sig: ActiveSignal, delay: float) -> void:
 	var sig_id := active_sig.get_instance_id()
 	_delay_in_progress[sig_id] = true
+	GlobalEvents.telemetry_event.emit(active_sig, "breach_started", {"delay_sec": delay})
 	_set_movement_disabled(active_sig, true)
 	_set_detection_paused(active_sig, true)
 	if not _delay_hold_tokens.has(sig_id):
@@ -48,9 +49,12 @@ func _finish_delay_window(active_sig: ActiveSignal, delay: float) -> void:
 			return
 		var remaining: float = delay - elapsed
 		var wait_time: float = minf(check_step, remaining)
-		await GlobalEvents.get_tree().create_timer(wait_time).timeout
+		await GlobalEvents.get_tree().create_timer(wait_time, false).timeout
 		elapsed += wait_time
 
+	# An OP during the final timer step can cancel this response too.
+	if not _delay_in_progress.get(sig_id, false):
+		return
 	_delay_in_progress.erase(sig_id)
 	_delay_completed[sig_id] = true
 
@@ -58,6 +62,8 @@ func _finish_delay_window(active_sig: ActiveSignal, delay: float) -> void:
 		_apply_effects(active_sig, 0.0)
 		if not active_sig.is_disabled:
 			active_sig.disable_signal()
+		if active_sig.data.type == SignalData.Type.DOOR and active_sig.data.door_locked:
+			GlobalEvents.signal_breached.emit(active_sig)
 
 	_set_movement_disabled(active_sig, false)
 	_set_detection_paused(active_sig, false)

@@ -49,3 +49,4 @@ func process_action(action_context: ActionContext) -> void:
 		&"scan_time_multiplier",
 		maxf(0.01, current_multiplier * scan_time_multiplier)
 	)
+	GlobalEvents.telemetry_event.emit(action_context.primary_target, "ic_triggered", {"ic": "haze", "difficulty": base_difficulty, "effect": "scan_slowed", "multiplier": scan_time_multiplier})

@@ -402,11 +402,13 @@ func _on_input_changed(text: String, index: int):
 func _flash_input_error(index: int):
 	var edit = input_edits[index]
 	edit.add_theme_color_override("font_color", COLOR_ERROR)
-	get_tree().create_timer(0.15).timeout.connect(
+	get_tree().create_timer(0.15, false).timeout.connect(
 		func(): edit.add_theme_color_override("font_color", COLOR_TEXT)
 	)
 
 func _handle_wrong_input(index: int, guess: String):
+	if linked_signal != null:
+		GlobalEvents.telemetry_event.emit(linked_signal, "puzzle_input", {"puzzle": "decrypt", "ok": false, "index": index})
 	var collapsed = false
 	if guess != "":
 		var options = keyspaces[index]
@@ -423,7 +425,7 @@ func _handle_wrong_input(index: int, guess: String):
 	var edit = input_edits[index]
 	edit.editable = false
 	_apply_input_style_error(index)
-	get_tree().create_timer(float(config.wrong_lockout_time)).timeout.connect(
+	get_tree().create_timer(float(config.wrong_lockout_time), false).timeout.connect(
 		func():
 			edit.editable = true
 			edit.text = ""
@@ -607,7 +609,7 @@ func _lockout_then_confirm(index: int):
 	var edit = input_edits[index]
 	edit.editable = false
 	_apply_input_style_error(index)
-	get_tree().create_timer(float(config.wrong_lockout_time)).timeout.connect(
+	get_tree().create_timer(float(config.wrong_lockout_time), false).timeout.connect(
 		func():
 			if confirmed[index]:
 				return

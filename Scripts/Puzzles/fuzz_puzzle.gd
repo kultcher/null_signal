@@ -72,6 +72,8 @@ func fire_packet() -> bool:
 	if not has_puzzle_focus():
 		return false
 	var fired := state.fire(aim_angle)
+	if linked_signal != null:
+		GlobalEvents.telemetry_event.emit(linked_signal, "puzzle_input", {"puzzle": "fuzz", "ok": fired, "kind": "packet_fired", "ammo": state.ammo})
 	_refresh()
 	return fired
 
@@ -79,7 +81,11 @@ func _process(delta: float) -> void:
 	for impact in impacts:
 		impact["age"] += delta
 	impacts = impacts.filter(func(hit: Dictionary) -> bool: return hit["age"] < state.config.impact_hold_sec + state.config.impact_fade_sec)
-	impacts.append_array(state.advance(delta))
+	var hits := state.advance(delta)
+	impacts.append_array(hits)
+	if linked_signal != null:
+		for hit in hits:
+			GlobalEvents.telemetry_event.emit(linked_signal, "packet_impact", {"puzzle": "fuzz", "points": hit.points, "offset_deg": rad_to_deg(wrapf(hit.angle - state.sweet_spot_angle, -PI, PI))})
 	_refresh()
 	if state.solved and not _solved_emitted:
 		_solved_emitted = true

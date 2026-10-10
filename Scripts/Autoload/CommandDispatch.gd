@@ -19,6 +19,7 @@ func clear_run_references() -> void:
 signal set_terminal_signal(active_sig: ActiveSignal)
 signal command_complete(cmd_context: CommandContext)
 signal command_error(error_msg: String, context: ActiveSignal)
+signal command_submitted(input: String, context: ActiveSignal)
 
 # === COMMAND REGISTRY ===
 const VALID_COMMANDS = {
@@ -74,6 +75,7 @@ func switch_terminal_session(active_sig: ActiveSignal, show_connection_banner: b
 # === MAIN ENTRY POINT ===
 
 func process_command(input: String, active_sig: ActiveSignal = null) -> void:
+	command_submitted.emit(input, active_sig)
 	if not GlobalEvents.is_tutorial_feature_enabled("terminal_commands"):
 		_fail("[b][color=red]SEQUENCE BREAK[/color][/b]: unexpected signal degradation.\nBuffering... [color=cyan]close external communcations[/color] and try again.", active_sig)
 		return

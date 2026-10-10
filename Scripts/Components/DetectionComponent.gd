@@ -201,7 +201,7 @@ func _build_polygon_points(cell_width_px: float) -> PackedVector2Array:
 	return points
 
 func _apply_detection(active_sig: ActiveSignal, delta):
-	GlobalEvents.runner_detected.emit()
+	GlobalEvents.runner_detected.emit(active_sig)
 	active_sig.instance_node.detection_controller.runner_spotted()
 	if active_sig.data.response:
 		active_sig.data.response.on_detection(active_sig, delta, delay)

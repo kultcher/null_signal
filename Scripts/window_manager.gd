@@ -45,6 +45,7 @@ func is_hardware_active() -> bool:
 
 var window_count := 0
 var _active_puzzle_windows: Dictionary = {}
+@export var game_over_on_runner_death := true
 var _game_over_dialog: ConfirmationDialog = null
 
 func _ready():
@@ -137,6 +138,8 @@ func _show_codex_popup(codex_id: StringName, signal_data: SignalData):
 	popup.setup_and_display(codex_id)
 
 func _on_runner_died() -> void:
+	if not game_over_on_runner_death:
+		return
 	if _game_over_dialog != null and is_instance_valid(_game_over_dialog):
 		return
 

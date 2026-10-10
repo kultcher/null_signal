@@ -57,6 +57,8 @@ func process_action(action_context: ActionContext) -> void:
 	if runner_distance <= max_runner_distance_cells:
 		return
 
+	if not action_context.blocked_by.has(&"faraday"):
+		action_context.blocked_by.append(&"faraday")
 	action_context.fail(
 		"COMMAND BLOCKED. [b][color=orange]FARADAY[/color][/b] shielding active. Move within %.1f cells to establish a stable link." % max_runner_distance_cells
 	)

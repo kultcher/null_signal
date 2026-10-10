@@ -56,6 +56,9 @@ func on_visuals_ready(active_sig: ActiveSignal, ic_effects: ICEffectsHost, modul
 
 func on_visuals_cleared(_active_sig: ActiveSignal) -> void:
 	effect_node = null
+	if timer != null and is_instance_valid(timer):
+		timer.queue_free()
+	timer = null
 	if GlobalEvents.signal_scan_complete.is_connected(_on_signal_scan_complete):
 		GlobalEvents.signal_scan_complete.disconnect(_on_signal_scan_complete)
 
@@ -86,5 +89,6 @@ func _scrub() -> void:
 	if active_sig == null:
 		return
 	active_sig.reset_scan_progress()
+	GlobalEvents.telemetry_event.emit(active_sig, "ic_triggered", {"ic": "shy", "difficulty": base_difficulty, "effect": "scan_scrubbed"})
 	if active_sig.instance_node != null:
 		active_sig.instance_node.rebuild_tooltip()

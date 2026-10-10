@@ -62,6 +62,7 @@ func start_signal_scan(target_signal: ActiveSignal) -> bool:
 	_dequeue_scan(target_signal)
 	active_scanning_signals.append(target_signal)
 	target_signal.is_being_scanned = true
+	GlobalEvents.telemetry_event.emit(target_signal, "scan_started", {"layer_index": target_signal.current_scan_index, "layer": target_signal.scan_layers[target_signal.current_scan_index].name})
 
 	target_signal.instance_node.bring_to_front()
 	target_signal.instance_node.show_scanning_tooltip()
@@ -83,6 +84,7 @@ func cancel_scan(active_sig: ActiveSignal = null):
 		return
 
 	active_scanning_signals.erase(active_sig)
+	GlobalEvents.telemetry_event.emit(active_sig, "scan_cancelled", {})
 	active_sig.current_layer_progress = 0
 	if active_sig.instance_node != null:
 		active_sig.instance_node.scan_cleanup()
