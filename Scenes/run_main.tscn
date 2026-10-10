@@ -34,6 +34,8 @@
 [ext_resource type="Script" uid="uid://bf0ljjcbw2fmg" path="res://Scripts/Facility/facility_map_layer.gd" id="31_fmap"]
 [ext_resource type="Script" uid="uid://cvm3qgwovpur8" path="res://Scripts/Facility/feed_switch_overlay.gd" id="32_feed"]
 
+[ext_resource type="PackedScene" path="res://Scenes/Debug/level_viewer.tscn" id="33_viewer"]
+
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_pcbq1"]
 shader = ExtResource("8_ojo04")
 shader_parameter/sweep_position = 0.5
@@ -493,5 +495,7 @@ offset_left = 111.0
 offset_top = 637.0
 offset_right = 111.0
 offset_bottom = 637.0
+
+[node name="LevelViewer" parent="." instance=ExtResource("33_viewer")]
 
 [connection signal="button_down" from="TempQuitButton" to="RunManager" method="_on_temp_quit_button_button_down"]
