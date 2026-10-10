@@ -204,8 +204,13 @@ func _sync_route_scale() -> void:
 	if cell_width_px <= 0.0:
 		return
 	var scale := lane_height / cell_width_px
+	# Segment lengths change with the scale, so remember where the runner is
+	# on the route and put them back there afterwards (no jump on resize).
+	var route := get_route()
+	var location := route.locate_progress(path_progress)
 	facility_layout.set_lane_to_cell_scale(scale)
 	_straight_route.set_lane_to_cell_scale(scale)
+	path_progress = route.progress_from_location(location)
 
 func get_viewport_size() -> Vector2:
 	return Vector2(screen_width, screen_height)

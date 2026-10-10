@@ -1,0 +1,23 @@
+{
+  "name": "cartridge",
+  "image_size": [
+    86,
+    118
+  ],
+  "chassis_rect": [
+    6,
+    6,
+    74,
+    106
+  ],
+  "rects": {
+    "label": [
+      15,
+      43,
+      56,
+      56
+    ]
+  },
+  "points": {},
+  "render_scale": 1.0
+}

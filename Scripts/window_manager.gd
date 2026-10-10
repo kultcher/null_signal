@@ -22,6 +22,13 @@ var codex_popup = preload("res://Scenes/codex_popup.tscn")
 @export var puzzle_spawn_position := Vector2(760, 430)
 @export var cascade_step := Vector2(25, 25)  # Each window offsets by this amount
 @export var auto_focus_puzzles := false
+## Hardware deck prototype: plug puzzles into aux modules on the DeskLayer instead of
+## spawning floating windows. Needs a DeskLayer node (Scripts/Deck/desk_layer.gd) next to
+## WindowManager in run_main.
+@export var use_hardware_devices := false
+@export var desk_layer_path: NodePath = ^"../DeskLayer"
+
+var desk_layer: DeskLayer = null
 
 var window_count := 0
 var _active_puzzle_windows: Dictionary = {}
@@ -29,6 +36,10 @@ var _game_over_dialog: ConfirmationDialog = null
 
 func _ready():
 	CommandDispatch.window_manager = self
+	desk_layer = get_node_or_null(desk_layer_path) as DeskLayer
+	if use_hardware_devices and desk_layer != null:
+		# tutorial focus / dialogue must stay above the desk
+		layer = maxi(layer, desk_layer.layer + 1)
 	GlobalEvents.puzzle_started.connect(_puzzle_started)
 	GlobalEvents.show_codex_popup.connect(_show_codex_popup)
 	GlobalEvents.runner_died.connect(_on_runner_died)
@@ -202,9 +213,12 @@ func _puzzle_started(active_sig: ActiveSignal, puzzle_type: PuzzleComponent.Type
 	puzzle_window.linked_signal = active_sig
 	puzzle_window.puzzle_solved.connect(_on_puzzle_solved.bind(active_sig, puzzle_window))
 	puzzle_window.puzzle_failed.connect(_on_puzzle_failed.bind(active_sig))
-	add_child(puzzle_window)
-	move_child(puzzle_window, get_child_count() - 1)
-	puzzle_window.position = puzzle_spawn_position
+	if use_hardware_devices and desk_layer != null:
+		desk_layer.dock_content(puzzle_window, "aux_decrypt")
+	else:
+		add_child(puzzle_window)
+		move_child(puzzle_window, get_child_count() - 1)
+		puzzle_window.position = puzzle_spawn_position
 	_active_puzzle_windows[puzzle_window] = active_sig
 	puzzle_window.tree_exiting.connect(_on_puzzle_window_tree_exiting.bind(puzzle_window), CONNECT_ONE_SHOT)
 	await get_tree().process_frame

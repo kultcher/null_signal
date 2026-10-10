@@ -31,6 +31,13 @@ func on_visuals_ready(active_sig: ActiveSignal, ic_effects: ICEffectsHost, modul
 	) as ICProgressRadial
 	if effect_node != null:
 		effect_node.configure(active_sig, reboot_time)
+		effect_node.set_gradient("res://Visuals/Gradients/cyan_gradient_tex.tres")
+		# Signal re-entered the view mid-reboot: pick the countdown back up.
+		if timer != null and is_instance_valid(timer) and not timer.is_stopped():
+			effect_node.start(reboot_time, timer)
+
+func on_visuals_cleared(_active_sig: ActiveSignal) -> void:
+	effect_node = null
 
 func apply_difficulty(difficulty: int) -> void:
 	reboot_time = float(_pick_difficulty_value(DIFFICULTY_REBOOT_TIMES, difficulty))

@@ -46,6 +46,15 @@ func register_effect(
 	if effect_node.get_parent() != parent:
 		parent.add_child(effect_node)
 
+	# Nest progress rings when a signal has several timed IC.
+	if effect_node.has_method("set_ring_index"):
+		var ring_index := 0
+		for entry in _effect_entries:
+			var other = entry.get("node", null)
+			if other != null and is_instance_valid(other) and other.has_method("set_ring_index"):
+				ring_index += 1
+		effect_node.set_ring_index(ring_index)
+
 	_effect_entries.append({
 		"id": effect_id,
 		"node": effect_node,

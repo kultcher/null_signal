@@ -1,9 +1,31 @@
 class_name ICProgressRadial extends TextureProgressBar
 
+# Used when a module doesn't pick a gradient. The scene's own texture is an
+# empty GradientTexture2D, which Godot draws as its magenta "missing texture"
+# checkerboard.
+const DEFAULT_GRADIENT_PATH := "res://Visuals/Gradients/cyan_gradient_tex.tres"
+# Each extra timed IC on the same signal draws its ring this much smaller, so
+# rings nest instead of overlapping.
+const RING_SCALE_STEP := 0.78
+
 var active: bool = false
 var show_when_idle: bool = false
 var new_max: float = 0.0
 var _countdown_timer: Timer = null
+
+func _ready() -> void:
+	var gradient_texture := texture_progress as GradientTexture2D
+	if texture_progress == null or (gradient_texture != null and gradient_texture.gradient == null):
+		set_gradient(DEFAULT_GRADIENT_PATH)
+	resized.connect(_center_pivot)
+	_center_pivot()
+
+func _center_pivot() -> void:
+	pivot_offset = size * 0.5
+
+# 0 = outermost ring; higher indices draw smaller, inside the earlier rings.
+func set_ring_index(index: int) -> void:
+	scale = Vector2.ONE * pow(RING_SCALE_STEP, maxi(0, index))
 
 func _process(_delta: float) -> void:
 	if not active:

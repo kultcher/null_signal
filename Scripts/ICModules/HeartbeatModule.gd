@@ -52,6 +52,7 @@ func on_visuals_ready(active_sig: ActiveSignal, ic_effects: ICEffectsHost, modul
 		if effect_node != null:
 			effect_node.configure(active_sig, beat_interval_sec)
 			effect_node.set_idle_visible(true)
+			effect_node.set_gradient("res://Visuals/Gradients/green_gradient_tex.tres")
 	# The rhythm starts once the signal is on the feed, so the player sees
 	# every beat from the first one.
 	_start_beats()
