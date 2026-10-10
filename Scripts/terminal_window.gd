@@ -232,6 +232,9 @@ func _stream_connection_flow_async(target_sig: ActiveSignal, flow_serial: int) -
 	var reveal_progress: float = 0.0
 
 	while reveal_progress < total_steps:
+		if get_tree().paused:
+			await get_tree().process_frame
+			continue
 		if flow_serial != _connection_flow_serial:
 			return
 		if active_session == null or active_session.active_signal != target_sig:

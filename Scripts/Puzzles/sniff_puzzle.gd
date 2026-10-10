@@ -267,6 +267,8 @@ func _on_cell_input(event: InputEvent, cell: Label):
 		_check_match(cell)
 
 func _check_match(cell: Label):
+	if linked_signal != null:
+		GlobalEvents.telemetry_event.emit(linked_signal, "puzzle_input", {"puzzle": "sniff", "ok": cell.text in remaining_targets})
 	if cell.text in remaining_targets:
 		# HIT — remove from remaining, mark cell as no longer a target
 		var matched_value = cell.text
@@ -286,7 +288,7 @@ func _check_match(cell: Label):
 	else:
 		# MISS — brief red flash
 		cell.add_theme_color_override("font_color", Color.RED)
-		get_tree().create_timer(0.15).timeout.connect(
+		get_tree().create_timer(0.15, false).timeout.connect(
 			func():
 				if is_instance_valid(cell): cell.add_theme_color_override("font_color", BASE_CELL_COLOR)
 		)

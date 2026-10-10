@@ -17,6 +17,11 @@ func _ready():
 		pips.append(pip)
 	_refresh_pips()
 
+func reset_health() -> void:
+	current_health = max_health
+	_death_emitted = false
+	_refresh_pips()
+
 func _take_damage(amount: float):
 	if _death_emitted:
 		return

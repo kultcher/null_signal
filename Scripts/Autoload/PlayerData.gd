@@ -11,6 +11,8 @@ func _ready():
 	GlobalEvents.signal_scan_complete.connect(_has_seen_codex_popup)
 
 func _has_seen_codex_popup(signal_data: SignalData):
+	if not signal_data.get_meta("auto_codex_popups", true):
+		return
 	var unseen_info: Array[StringName] = check_against_codex(signal_data)
 	if unseen_info.size() == 0: return
 	for codex_id in unseen_info:

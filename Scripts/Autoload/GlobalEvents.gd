@@ -36,6 +36,10 @@ signal runner_hold_count_changed(count: int)
 
 signal ic_triggered(ice_type: String)
 
+# Structured observations for optional playtest recorders. No gameplay behavior.
+signal telemetry_event(active_sig: ActiveSignal, event: String, details: Dictionary)
+signal signal_breached(active_sig: ActiveSignal)
+
 signal guard_alert_raised(alert: GuardAlertData)
 signal guard_comms_ping_started(active_sig: ActiveSignal)
 signal guard_comms_ping_ended(active_sig: ActiveSignal)

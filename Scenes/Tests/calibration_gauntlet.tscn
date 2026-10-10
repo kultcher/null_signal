@@ -1,0 +1,334 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/run_main.tscn" id="1_game"]
+[ext_resource type="Script" path="res://Scripts/Calibration/calibration_gauntlet.gd" id="2_controller"]
+[ext_resource type="Script" path="res://Scripts/Calibration/PlaytestRecorder.gd" id="3_recorder"]
+[ext_resource type="FontFile" path="res://Visuals/Fonts/ShareTechMono-Regular.ttf" id="4_font"]
+
+[sub_resource type="StyleBoxFlat" id="Style_settings"]
+content_margin_left = 20.0
+content_margin_top = 16.0
+content_margin_right = 20.0
+content_margin_bottom = 16.0
+bg_color = Color(0.025, 0.045, 0.055, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.05, 0.55, 0.6, 1)
+
+[sub_resource type="StyleBoxFlat" id="Style_bar"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.025, 0.045, 0.055, 0.96)
+
+[sub_resource type="Theme" id="Theme_calibration"]
+default_font = ExtResource("4_font")
+default_font_size = 20
+PanelContainer/styles/panel = SubResource("Style_settings")
+
+[node name="CalibrationGauntlet" type="Node"]
+process_mode = 3
+script = ExtResource("2_controller")
+
+[node name="Game" parent="." instance=ExtResource("1_game")]
+process_mode = 1
+
+[node name="Recorder" type="Node" parent="."]
+script = ExtResource("3_recorder")
+
+[node name="NextTrial" type="Timer" parent="."]
+process_mode = 1
+one_shot = true
+wait_time = 1.0
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 30
+
+[node name="Bar" type="PanelContainer" parent="HUD"]
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 8.0
+offset_right = -20.0
+offset_bottom = 106.0
+theme_override_styles/panel = SubResource("Style_bar")
+theme = SubResource("Theme_calibration")
+theme_override_font_sizes/font_size = 18
+
+[node name="Rows" type="VBoxContainer" parent="HUD/Bar"]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="HUD/Bar/Rows"]
+layout_mode = 2
+text = "CALIBRATION // SETUP"
+
+[node name="Buttons" type="HBoxContainer" parent="HUD/Bar/Rows"]
+layout_mode = 2
+
+[node name="Settings" type="Button" parent="HUD/Bar/Rows/Buttons"]
+layout_mode = 2
+text = "Settings"
+
+[node name="Pause" type="Button" parent="HUD/Bar/Rows/Buttons"]
+layout_mode = 2
+text = "Pause [F7]"
+
+[node name="Repeat" type="Button" parent="HUD/Bar/Rows/Buttons"]
+layout_mode = 2
+text = "Repeat fresh [F8]"
+
+[node name="Skip" type="Button" parent="HUD/Bar/Rows/Buttons"]
+layout_mode = 2
+text = "Skip [F9]"
+
+[node name="End" type="Button" parent="HUD/Bar/Rows/Buttons"]
+layout_mode = 2
+text = "End + save [F10]"
+
+[node name="Output" type="Label" parent="HUD/Bar/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "JSONL + CSV // Set up a session to begin."
+
+[node name="Settings" type="PanelContainer" parent="HUD"]
+offset_left = 360.0
+offset_top = 150.0
+offset_right = 1560.0
+offset_bottom = 940.0
+theme = SubResource("Theme_calibration")
+theme_override_font_sizes/font_size = 20
+
+[node name="Fields" type="VBoxContainer" parent="HUD/Settings"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="HUD/Settings/Fields"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "CALIBRATION // CORRIDOR GAUNTLET"
+
+[node name="Info" type="Label" parent="HUD/Settings/Fields"]
+layout_mode = 2
+text = "Open each door with OP before the runner breaches it. Escalation stays off.
+Settings apply to the next trial. Repeat keeps the combination, generates a fresh instance."
+
+[node name="Tester" type="LineEdit" parent="HUD/Settings/Fields"]
+layout_mode = 2
+placeholder_text = "Tester tag"
+text = "tester"
+
+[node name="Skill" type="LineEdit" parent="HUD/Settings/Fields"]
+layout_mode = 2
+placeholder_text = "Experience tag (novice / practiced / expert, or your own)"
+text = "unspecified"
+
+[node name="Mode" type="OptionButton" parent="HUD/Settings/Fields"]
+layout_mode = 2
+item_count = 2
+selected = 0
+popup/item_0/text = "Single elements: baseline, one IC, or one puzzle"
+popup/item_0/id = 0
+popup/item_1/text = "Combinations: selected IC count + optional puzzle"
+popup/item_1/id = 1
+
+[node name="Numbers" type="GridContainer" parent="HUD/Settings/Fields"]
+layout_mode = 2
+columns = 6
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 8
+
+[node name="Label_ic_count" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "IC count"
+
+[node name="ic_count" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 0
+max_value = 7
+step = 1
+value = 1
+
+[node name="Label_ic_min" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "IC min"
+
+[node name="ic_min" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 1
+max_value = 20
+step = 1
+value = 1
+
+[node name="Label_ic_max" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "IC max"
+
+[node name="ic_max" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 1
+max_value = 20
+step = 1
+value = 1
+
+[node name="Label_puzzle_min" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "Puzzle min"
+
+[node name="puzzle_min" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 1
+max_value = 20
+step = 1
+value = 1
+
+[node name="Label_puzzle_max" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "Puzzle max"
+
+[node name="puzzle_max" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 1
+max_value = 20
+step = 1
+value = 1
+
+[node name="Label_shuffle_seed" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "Shuffle seed"
+
+[node name="shuffle_seed" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 0
+max_value = 999999999
+step = 1
+value = 1
+
+[node name="Label_breach_delay_sec" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "Breach delay (s)"
+
+[node name="breach_delay_sec" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 0.1
+max_value = 30
+step = 0.1
+value = 3
+
+[node name="Label_next_delay_sec" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "Next delay (s)"
+
+[node name="next_delay_sec" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 0
+max_value = 10
+step = 0.1
+value = 1
+
+[node name="Label_runner_speed" type="Label" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+text = "Runner cells / s"
+
+[node name="runner_speed" type="SpinBox" parent="HUD/Settings/Fields/Numbers"]
+layout_mode = 2
+custom_minimum_size = Vector2(125, 0)
+min_value = 0.01
+max_value = 2
+step = 0.01
+value = 0.15
+
+[node name="Puzzle" type="CheckButton" parent="HUD/Settings/Fields"]
+layout_mode = 2
+text = "Include puzzles"
+button_pressed = true
+
+[node name="Baseline" type="CheckButton" parent="HUD/Settings/Fields"]
+layout_mode = 2
+text = "Include unprotected baseline"
+button_pressed = true
+
+[node name="ResetHeat" type="CheckButton" parent="HUD/Settings/Fields"]
+layout_mode = 2
+text = "Reset heat between trials"
+button_pressed = true
+
+[node name="Pools" type="HBoxContainer" parent="HUD/Settings/Fields"]
+layout_mode = 2
+theme_override_constants/separation = 60
+
+[node name="IC" type="GridContainer" parent="HUD/Settings/Fields/Pools"]
+layout_mode = 2
+columns = 4
+
+[node name="Puzzles" type="HBoxContainer" parent="HUD/Settings/Fields/Pools"]
+layout_mode = 2
+
+[node name="bouncer" type="CheckBox" parent="HUD/Settings/Fields/Pools/IC"]
+layout_mode = 2
+text = "Bouncer"
+button_pressed = true
+
+[node name="callback" type="CheckBox" parent="HUD/Settings/Fields/Pools/IC"]
+layout_mode = 2
+text = "Callback"
+button_pressed = true
+
+[node name="faraday" type="CheckBox" parent="HUD/Settings/Fields/Pools/IC"]
+layout_mode = 2
+text = "Faraday"
+button_pressed = true
+
+[node name="haze" type="CheckBox" parent="HUD/Settings/Fields/Pools/IC"]
+layout_mode = 2
+text = "Haze"
+button_pressed = true
+
+[node name="trace" type="CheckBox" parent="HUD/Settings/Fields/Pools/IC"]
+layout_mode = 2
+text = "Trace"
+button_pressed = true
+
+[node name="shy" type="CheckBox" parent="HUD/Settings/Fields/Pools/IC"]
+layout_mode = 2
+text = "Shy"
+button_pressed = true
+
+[node name="siphon" type="CheckBox" parent="HUD/Settings/Fields/Pools/IC"]
+layout_mode = 2
+text = "Siphon"
+button_pressed = true
+
+[node name="sniff" type="CheckBox" parent="HUD/Settings/Fields/Pools/Puzzles"]
+layout_mode = 2
+text = "Sniff"
+button_pressed = true
+
+[node name="decrypt" type="CheckBox" parent="HUD/Settings/Fields/Pools/Puzzles"]
+layout_mode = 2
+text = "Decrypt"
+button_pressed = true
+
+[node name="fuzz" type="CheckBox" parent="HUD/Settings/Fields/Pools/Puzzles"]
+layout_mode = 2
+text = "Fuzz"
+button_pressed = true
+
+[node name="Note" type="Label" parent="HUD/Settings/Fields"]
+layout_mode = 2
+text = "Single elements uses IC count as off/on. Combination mode uses the exact count.
+Reboot, Heartbeat, Tripwire, Tether and Necromancer need separate scenarios.
+Each seed shuffles trial settings; puzzle solutions and Callback sequences stay fresh."
+
+[node name="Apply" type="Button" parent="HUD/Settings/Fields"]
+layout_mode = 2
+text = "Start / apply to next trial"
