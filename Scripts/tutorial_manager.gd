@@ -961,7 +961,7 @@ func _cam_02_kill_or_hustle(active_signal: ActiveSignal) -> String:
 	print("returning for real")
 	return result
 
-func _runner_detected_dialogue():
+func _runner_detected_dialogue(_active_sig: ActiveSignal):
 	# NOTE: Might need to add cell gating here to keep this from firing later
 	if timeline_manager.current_cell_pos > 41: return
 	_show_dialogue([

@@ -57,8 +57,9 @@ Additional `wall_t` is pause-excluded real time: use it for human time cost,
 because Null Spike slows game time. Tester, skill and trial identifiers are
 included. Signal visibility is measured at the screen edge, not at spawn.
 
-The recorder logs scans and layers, connection, commands and rejections, puzzle
-open/solve/close, input errors, Fuzz impacts, IC triggers, Callback acceptance,
+The recorder logs scans and layers, connection and channel readiness, commands
+and rejections, puzzle open/solve/close, input errors, Fuzz impacts, IC triggers,
+Callback acceptance,
 heat, holds, breach, speed, assistance and outcomes. Puzzle reopenings count as
 attempts; ordinary input errors count separately. `detected.heat_delta` is zero
 at contact; subsequent response heat appears in `heat` events. Completed trial
@@ -83,8 +84,19 @@ It writes `summary.json`, `trials_summary.csv`, `component_costs.csv` and
 `--out`. With `--table`, it also writes `cost_table_candidate.json`, in the
 version-1 format accepted by `CostTable`. It never overwrites the canonical file.
 
-Only unassisted successful isolated trials feed cost candidates. Puzzle
-open-to-solve and Callback connection-to-acceptance are measured separately;
+Only unassisted successful isolated trials feed cost candidates. Base notice,
+connect and command samples come only from unprotected baseline trials, so
+puzzle and IC tuning does not fragment or bias those shared estimates. Keep
+baseline trials enabled to calibrate those entries.
+
+`connected` marks the start of the terminal connection reveal;
+`connection_ready` marks its completion, before any buffered command dispatch.
+Base connect measures that interval. Base command starts at readiness, and
+Callback readiness-to-acceptance excludes the reveal too. Logs recorded before
+this marker was added still contribute puzzle and clear times, but their
+connect, command and Callback candidates are excluded with a warning.
+
+Puzzle open-to-solve and Callback readiness-to-acceptance are measured separately;
 scan background time excludes overlapping puzzle/Callback intervals. Other IC
 receives a descriptive baseline delta with scan time removed, not an invented
 blocking/background split. Candidates keep guesses below five samples or when
@@ -101,4 +113,5 @@ python -m unittest discover -s Tools/Calibration -p 'test_*.py'
 ```
 
 The integration scene exercises sampling, OP, parser errors, cleanup, repeat,
-real breach and pause, Callback retry/acceptance, Fuzz, and the JSONL contract.
+real breach and pause, buffered Callback retry/acceptance, Fuzz, the JSONL
+contract, and the tutorial's runner-detection reaction.

@@ -21,6 +21,7 @@ signal session_opened(active_sig: ActiveSignal)
 signal session_activated(active_sig: ActiveSignal)
 signal session_deactivated(active_sig: ActiveSignal)
 signal session_closed(active_sig: ActiveSignal)
+signal connection_ready(active_sig: ActiveSignal)
 signal session_line_display_mode_changed()
 ## Emitted after the Scan / Lock / IC detail panels refresh (the hardware deck mirrors them on its lamps).
 signal detail_panel_refreshed()
@@ -113,6 +114,8 @@ func switch_session(new_sig: ActiveSignal, show_connection_banner: bool = false)
 	if active_signal == new_sig:
 		_refresh_prefix()
 		_focus_command_line()
+		if not _connection_send_locked:
+			connection_ready.emit(new_sig)
 		return
 
 	# Create new session
@@ -129,6 +132,7 @@ func switch_session(new_sig: ActiveSignal, show_connection_banner: bool = false)
 			_play_connection_flow(new_sig)
 		else:
 			print_to_log("New session started with " + new_sig.data.system_id)
+			connection_ready.emit(new_sig)
 		print_to_root("<Session Log>: Connected to " + new_sig.data.system_id)
 		_refresh_prefix()
 		_focus_command_line()
@@ -152,6 +156,7 @@ func switch_session(new_sig: ActiveSignal, show_connection_banner: bool = false)
 			_focus_command_line()
 			return
 		restore_session(active_session)
+		connection_ready.emit(new_sig)
 
 func failed_connection_feedback(active_sig):
 	print_unlogged("<Session Log>: WARNING: " + active_sig.data.system_id + " out of range. Dropping to root.")
@@ -281,9 +286,13 @@ func _finish_connection_flow(flow_serial: int, target_sig: ActiveSignal) -> void
 	if flow_serial != _connection_flow_serial:
 		return
 	_connection_send_locked = false
-	_flush_buffered_command(target_sig, flow_serial)
 	if target_sig != null and target_sig.data != null and target_sig.data.ic_modules != null:
 		target_sig.data.ic_modules.notify_connected(target_sig)
+	if active_signal == target_sig and target_sig != null and target_sig.terminal_session != null and target_sig.terminal_session.has_tab:
+		connection_ready.emit(target_sig)
+	# Record readiness and arm IC before dispatching a command queued during
+	# the reveal. Its timestamp belongs to the ready channel, not the animation.
+	_flush_buffered_command(target_sig, flow_serial)
 
 func _clear_buffered_command() -> void:
 	_buffered_command_text = ""

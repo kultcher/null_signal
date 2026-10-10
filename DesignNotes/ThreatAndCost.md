@@ -161,6 +161,7 @@ Events:
 | `signal_visible` | first frame the signal is on screen |
 | `scan_started` / `scan_layer_complete` / `scan_complete` | `layer` (IDENTITY, ACCESS, IC), `layer_index` |
 | `connected` / `disconnected` | `reason` (player, bouncer, range, ...) |
+| `connection_ready` | connection reveal finished; emitted before buffered command dispatch |
 | `command` | `command`, `ok`, `blocked_by` (IC id, if any) |
 | `puzzle_opened` / `puzzle_solved` / `puzzle_failed` / `puzzle_closed` | `puzzle` (sniff/decrypt/fuzz), `difficulty`, `attempts` |
 | `ic_triggered` / `ic_neutralized` | `ic` (codex id without prefix), `difficulty` |
@@ -171,7 +172,9 @@ Events:
 Derived per signal, per tester:
 
 - **blocking time** = sum of puzzle open-to-close + IC interaction time +
-  command count x per-command time (measured from `connected` to `command`).
+  connection reveal time (`connected` to `connection_ready`) + command work
+  (measured from `connection_ready` to the first command). Callback interaction
+  also starts at readiness, so the reveal is counted once.
 - **background time** = scan_started to scan_complete, minus blocking overlap.
 - **notice** = `signal_visible` to first `scan_started`.
 - **hold** = time held while this signal was the active target.
@@ -181,6 +184,10 @@ Updating the table: a summary script groups by key (`puzzle.sniff.2`,
 `background`, sets `source` to `telemetry` and `samples` to n, and keeps the
 spread (p25/p75) in `notes` or extra fields. Keep guesses for keys with fewer
 than ~5 samples. Record tester skill tags so we can split novice/expert later.
+The gauntlet summary calibrates shared base costs from unprotected baseline
+trials only. Puzzle/IC costs retain their resolved tuning signatures. Older
+logs without `connection_ready` cannot separate reveal and command/Callback
+time, so those cost candidates are excluded rather than double-counted.
 
 ## Pressure curve
 

@@ -62,6 +62,8 @@ func run_checks() -> void:
 		get_viewport().get_texture().get_image().save_png("/tmp/gauntlet-play.png")
 	CommandDispatch.process_command("ACCESS " + sig.data.system_id, CommandDispatch.terminal_window.root_signal)
 	CommandDispatch.process_command("NONSENSE", sig)
+	while CommandDispatch.terminal_window._connection_send_locked:
+		await get_tree().process_frame
 	CommandDispatch.process_command("OP", sig)
 	check("successful OP immediately completes trial", lab.recorder.records.size() == 1 and lab.recorder.records[0].outcome == "success" and not sig.data.door_locked)
 	check("parser rejection counts as command friction", lab.recorder.records[0].failed_commands == 1)
@@ -105,10 +107,15 @@ func run_checks() -> void:
 	lab.spawn_next()
 	sig = lab.current
 	CommandDispatch.process_command("ACCESS " + sig.data.system_id, CommandDispatch.terminal_window.root_signal)
+	var callback: CallbackModule = sig.data.ic_modules.modules[0]
+	CommandDispatch.terminal_window._buffer_command_submit("$" + callback.callback_sequence)
 	while CommandDispatch.terminal_window._connection_send_locked:
 		await get_tree().process_frame
+	check("buffered Callback input runs after readiness and IC arming", callback._resolved)
+	# Re-arm this fresh instance to measure a rejection followed by acceptance.
+	callback._resolved = false
+	callback.on_connect(sig)
 	CommandDispatch.process_command("$wrong", sig)
-	var callback: CallbackModule = sig.data.ic_modules.modules[0]
 	CommandDispatch.process_command("$" + callback.callback_sequence, sig)
 	CommandDispatch.process_command("OP", sig)
 	check("Callback acceptance and retry are recorded", lab.recorder.records[-1].outcome == "success" and lab.recorder.records[-1].failed_commands == 1)
@@ -189,8 +196,26 @@ func run_checks() -> void:
 	check("logs contain Callback neutralization and Fuzz runtime target", events.any(func(e): return e.event == "ic_neutralized" and e.ic == "callback" and e.difficulty == 2) and events.any(func(e): return e.event == "puzzle_opened" and e.has("target_angle_deg")))
 	check("visibility, scan phases and Haze trigger are recorded", events.any(func(e): return e.event == "signal_visible") and events.any(func(e): return e.event == "scan_complete") and events.any(func(e): return e.event == "ic_triggered" and e.ic == "haze"))
 	check("Bouncer disconnect retains its cause", events.any(func(e): return e.event == "disconnected" and e.reason == "bouncer"))
+	var ready_index := -1
+	var first_callback_index := -1
+	for index in events.size():
+		var event: Dictionary = events[index]
+		if event.get("signal") == "trial_0004":
+			if event.event == "connection_ready" and ready_index == -1:
+				ready_index = index
+			if event.event == "command_started" and String(event.input).begins_with("$") and first_callback_index == -1:
+				first_callback_index = index
+	check("connection readiness is logged before buffered command timing", ready_index >= 0 and first_callback_index > ready_index)
 	check("CSV and run-ended event are flushed", FileAccess.file_exists(lab.recorder.csv_path) and events[-1].event == "run_ended")
 	print("GAUNTLET LOG: " + ProjectSettings.globalize_path(path))
+	# Exercise the tutorial's real one-shot signal connection and reaction.
+	var tutorial = lab.game.get_node("TutorialManager")
+	lab.timeline.set_runner_cell(0)
+	var child_count: int = manager.get_child_count()
+	GlobalEvents.runner_detected.connect(tutorial._runner_detected_dialogue, CONNECT_ONE_SHOT)
+	GlobalEvents.runner_detected.emit(sig)
+	check("tutorial detection callback accepts the signal and opens dialogue", manager.get_child_count() == child_count + 1)
+	await get_tree().create_timer(3.1, true).timeout
 	lab.queue_free()
 	await get_tree().process_frame
 	print("GAUNTLET TEST: %d failures" % failures)
