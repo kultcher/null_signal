@@ -27,6 +27,10 @@ func _ready():
 		if not terminal_window.session_line_display_mode_changed.is_connected(_on_session_line_display_mode_changed):
 			terminal_window.session_line_display_mode_changed.connect(_on_session_line_display_mode_changed)
 
+func _exit_tree() -> void:
+	for active_sig in signal_queue:
+		active_sig.release_run_state()
+
 func get_active_signal(display_name: String):
 	print("Search queue for: ", display_name)
 	for sig in signal_queue:

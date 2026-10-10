@@ -21,6 +21,8 @@ func _draw() -> void:
 		_draw_route_distances()
 	if not viewer.measurement.is_empty():
 		_draw_ruler()
+	if not viewer.start_location.is_empty():
+		_draw_start_point()
 
 func _label(point: Vector2, text: String, color: Color = INK, size: int = 13) -> void:
 	var width := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
@@ -112,6 +114,13 @@ func _draw_signal(entry: Dictionary) -> void:
 	# These markers intentionally reveal even hidden/unknown authored signals.
 	draw_circle(position, 7.0 if selected else 5.0, color)
 	draw_circle(position, 11.0 if selected else 8.0, color, false, 1.5)
+	if viewer.security_toggle.button_pressed:
+		var locked := (data.puzzle != null and data.puzzle.is_locked()) or (data.type == SignalData.Type.DOOR and data.door_locked)
+		if locked:
+			var badge := position + Vector2(-12.0, -12.0)
+			draw_colored_polygon(PackedVector2Array([badge + Vector2(0, -4), badge + Vector2(4, 0), badge + Vector2(0, 4), badge + Vector2(-4, 0)]), GOLD)
+		if data.ic_modules != null and not data.ic_modules.modules.is_empty():
+			draw_rect(Rect2(position + Vector2(9.0, -15.0), Vector2(7.0, 7.0)), Color(0.9, 0.5, 1.0))
 	if viewer.labels_toggle.button_pressed and (viewer.zoom >= 0.12 or selected):
 		var label_pos := position + Vector2(12.0, 24.0 if data.lane >= 3 else -22.0)
 		var label_width := _font.get_string_size(data.system_id, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13).x
@@ -119,6 +128,25 @@ func _draw_signal(entry: Dictionary) -> void:
 		_label(label_pos, data.system_id, color)
 		if viewer.distance_toggle.button_pressed:
 			_label(label_pos + Vector2(0.0, 16.0), "%.2f / %d" % [entry["cell"], data.lane], color, 12)
+	if viewer.security_toggle.button_pressed and (viewer.zoom >= 0.12 or selected):
+		var summary: String = viewer.security_summary(data)
+		if not summary.is_empty():
+			var width := _font.get_string_size(summary, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12).x
+			var security_pos := position + Vector2(12.0, 56.0 if data.lane >= 3 else 14.0)
+			security_pos.x = clampf(security_pos.x, rect.position.x + 3.0, maxf(rect.position.x + 3.0, rect.end.x - width - 5.0))
+			_label(security_pos, summary, Color(0.9, 0.7, 0.95), 12)
+
+func _draw_start_point() -> void:
+	if viewer.section_index >= 0 and viewer.start_location["section_id"] != viewer.get_current_section().id:
+		return
+	var point: Vector2 = viewer.cell_lane_to_screen(viewer.start_position.x, viewer.start_position.y)
+	if not viewer.get_map_rect().has_point(point):
+		return
+	var color := Color(0.5, 1.0, 0.5)
+	draw_circle(point, 13.0, color, false, 2.0)
+	draw_line(point - Vector2(19.0, 0.0), point + Vector2(19.0, 0.0), color, 2.0)
+	draw_line(point - Vector2(0.0, 19.0), point + Vector2(0.0, 19.0), color, 2.0)
+	_label(point + Vector2(20.0, -20.0), "START %.2f / %.2f" % [viewer.start_position.x, viewer.start_position.y], color)
 
 func _draw_route_distances() -> void:
 	var rect: Rect2 = viewer.get_map_rect()

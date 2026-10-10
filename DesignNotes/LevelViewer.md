@@ -13,13 +13,16 @@ It pauses gameplay and restores the previous pause state when closed.
 | Home / Fit section | Frame the selected section, including side rooms and patrol points |
 | Shift+Home / Fit level | Show all sections and authored signals |
 | Page Up / Page Down | Previous / next section |
-| Left click on a signal | Inspect ID, exact cell/lane, vision, patrol, and IC |
+| Left click on a signal | Inspect ID, exact cell/lane, vision, patrol, puzzle, and IC |
 | Shift+left click twice | Place ruler A and B (snaps to nearby signals); next click starts a new ruler |
+| Alt+left click | Choose a starting point, snapped to the nearest route segment in the visible section(s) |
+| Restart here | Replace the live run with a fresh run using the preview definition at the chosen point |
 | Delete | Clear ruler |
 | R / Reload | Re-read the selected run script and rebuild the preview |
 
 Use the run dropdown to inspect any `.gd` in
-`Resources/RunData/AuthoredRuns`; this does not switch the live game to that run.
+`Resources/RunData/AuthoredRuns`; choosing a run only changes the preview until
+you use Restart here.
 The section dropdown includes an all-sections overview.
 
 ## Distance and overlays
@@ -33,17 +36,25 @@ lane-to-cell metric captured when loading, and does not change with zoom.
 It is not distance travelled along the runner's route. Route waypoints have
 cumulative `path` distance labels when both Route and Distance are enabled.
 
-Route, Vision, Patrols, Sections, and Signal labels can each be toggled.
+Route, Vision, Patrols, Sections, Signal labels, and Security can each be toggled.
 Hidden and unscanned authored signals are always included. Vision uses the
 same polygon function as gameplay; sweep cameras display their initial sweep
 orientation, with the sweep schedule in the inspector. Patrols are static paths,
 including the return leg for loop patrols. Walls retain their gameplay rendering
 behavior and remain decorative.
 
+Security shows initial puzzle type, difficulty and lock state, plus configured
+IC count. Amber diamonds mark locked puzzles/doors; violet squares mark IC.
+The inspector includes puzzle configuration, IC descriptions, tuning values,
+and whether difficulty scales with escalation. These are the initial authored
+values, including hidden protection, independent of scans and changes in the
+frozen live run. No IC hooks run while building the preview.
+
 ## Authoring and reload
 
 Edit and save the selected run's `.gd`, then press R. Reload preserves the
-view, selected section ID, and selected signal ID where they still exist.
+view, selected section ID, selected signal ID, and chosen start section/segment
+where they still exist.
 Parse failures, missing files, and unrelated scripts keep the previous valid
 preview and display an error status. Detailed parse errors appear in Godot's
 output. The viewer requires a valid `RunDefinition`; arbitrary runtime errors
@@ -51,9 +62,28 @@ inside authored getter methods are still GDScript errors and should be fixed
 in the source.
 
 The viewer is a separate authored snapshot. Reload updates **the preview**;
-restart the run to play the new definition. Closing resumes the existing run
+use Restart here or restart the run normally to play the new definition.
+Closing resumes the existing run
 at its frozen position. It does not reset progress, heat, scans, terminals, IC,
 or patrols.
+
+## Restart from a route point
+
+Alt-click the map to place the green START marker, then click Restart here.
+The closest route point uses the same lane-to-cell metric as gameplay. It
+retains section, segment and segment fraction, so vertical paths and overlapping
+section boundaries work. The selected preview run and successfully reloaded
+script are used, even if they differ from the current live run.
+
+This starts a fresh run at that position: health, heat, scans, locks, IC,
+terminals, guards, RAM reservations and program cooldowns reset. The equipped
+loadout and persistent player data are retained. Pending effects from the old
+run are stopped before the replacement scene registers its managers.
+
+Earlier gameplay is not simulated. Signals and patrols start in their authored
+initial state. The current tutorial sequence is bypassed and its features are
+enabled for free play. Future scripted sequences may require their own debug
+start handling; this does not reconstruct objectives or sequence history.
 
 ## Implementation
 
@@ -70,6 +100,7 @@ and never registers itself with `CommandDispatch`.
 ```sh
 godot --headless --path . res://Tests/level_viewer_test.tscn
 godot --headless --path . res://Tests/level_viewer_test.tscn -- --invalid-reload
+godot --headless --path . res://Tests/level_viewer_restart_test.tscn
 godot --headless --path . res://Tests/regtest.tscn
 ```
 
@@ -82,4 +113,5 @@ NULL_VIEWER_SHOT_DIR=/tmp LIBGL_ALWAYS_SOFTWARE=1 godot --path . --rendering-met
 ```
 
 Set `NULL_VIEWER_SHOT_DIR` to an existing writable directory to save parking and
-office captures there. Otherwise the test does not write screenshots.
+office captures there. The restart test saves `null-viewer-security.png` with
+the same environment settings. Otherwise the tests do not write screenshots.

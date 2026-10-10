@@ -215,6 +215,10 @@ func _install_player_loadout() -> void:
 	for definition in PlayerData.get_equipped_programs():
 		install_program(definition)
 
+func reset_run_state() -> void:
+	_install_player_loadout()
+	_emit_ram_usage_changed()
+
 func _on_ram_manager_total_changed(new_total_ram: int) -> void:
 	total_ram = maxi(0, new_total_ram)
 	total_ram_changed.emit(total_ram)

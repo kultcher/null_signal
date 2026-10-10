@@ -117,6 +117,19 @@ func reset_tutorial_features() -> void:
 		_tutorial_feature_flags[feature_key] = true
 		tutorial_feature_changed.emit(feature_key, true)
 
+# Called after the old run has been freed, before a debug run is created.
+func reset_run_state() -> void:
+	# IC timers are hosted here so they can survive feed despawns. They
+	# belong to the old run and must not survive a whole-scene restart.
+	for child in get_children():
+		if child is Timer:
+			child.free()
+	_runner_holds.clear()
+	_runner_hold_counter = 0
+	first_null_spike = false
+	reset_tutorial_features()
+	runner_hold_count_changed.emit(0)
+
 func set_tutorial_feature_enabled(feature_key: String, enabled: bool) -> void:
 	if feature_key.is_empty():
 		return

@@ -46,6 +46,10 @@ func get_reserved_ram() -> int:
 		total_reserved += int(amount)
 	return total_reserved
 
+func reset_run_state() -> void:
+	_reservations.clear()
+	_emit_ram_usage_changed()
+
 func get_program_used_ram() -> int:
 	if ProgramManager == null or not ProgramManager.has_method("get_used_ram"):
 		return 0
