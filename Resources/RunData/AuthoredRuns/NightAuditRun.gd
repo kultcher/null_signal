@@ -15,9 +15,6 @@ extends RunDefinition
 #
 # Rough first pass: layout and signal placement only. Not tuned.
 # TODO (needs new mechanics):
-#   - Flavor-only signals for the Concierge (car alarm logging "armed" with a
-#     dead battery, charger billing a car for 1,400 days, the nightly
-#     "Q3 SYNERGY REVIEW" booking, plant waterer on plastic plants).
 #   - Motion-zone lighting in the parking level as a patrol tell.
 #   - THE AUDIT: heat threshold in the records wing flips every display to a
 #     running cost tally and starts shutters closing (extraction race).
@@ -257,6 +254,32 @@ func get_rooms() -> Array[FacilityRoom]:
 			.place(&"barrier_arm", 72.6, 1.2, 1) \
 			.place(&"guard_booth", 73.4, 0.0) \
 			.build(),
+	]
+
+# The Concierge's ghost routines: flavor objects (hover text, no gameplay).
+func get_flavor() -> Array[Dictionary]:
+	return [
+		# --- B2 parking ---
+		flavor(-0.5, 1.0, "PAY STATION // \"HAVE A PRODUCTIVE DAY\"\nLast ticket issued 6 yrs ago."),
+		flavor(5.58, -0.3, "EV CHARGER B2-14 // SESSION ACTIVE 1,412 DAYS\nBalance due: 88,214 KC. Billing continues."),
+		flavor(9.6, 4.0, "VEHICLE ALARM // STATUS: ARMED\nBattery: 0%"),
+
+		# --- 14F open plan ---
+		flavor(15.4, 0.9, "IRRIGATION NODE // CYCLE COMPLETE\nPlant status: synthetic."),
+		flavor(29.4, -1.6, "CONF B // NEXT: Q3 SYNERGY REVIEW, 23:00\nRecurring nightly. Attendees confirmed: 0/14."),
+		flavor(33.55, 1.75, "VENDOR 14-B // RESTOCKED NIGHTLY\nUnits sold this fiscal year: 0"),
+		flavor(36.73, 0.05, "HOT DESK 14-031 // RESERVED: J. ADEYEMI\nCheck-in overdue 2,191 days."),
+
+		# --- Records wing ---
+		flavor(42.5, -0.4, "COPIER // PAPER JAM, TRAY 2\nService ticket open 1,804 days."),
+		flavor(44.3, 0.8, "SHREDDER // QUEUE EMPTY\nLast job: BOARD_MINUTES_FINAL_v9"),
+
+		# --- Freight car ---
+		flavor(56.5, 1.1, "CONCIERGE // \"THANK YOU FOR RIDING WITH KRONOS.\nPLEASE MIND YOUR TIME.\""),
+
+		# --- Dock / yard ---
+		flavor(69.8, 0.4, "KRONOS COURIER // ROUTE: ANNEX 7 -> TOWER 1\nDeliveries pending: 4,380"),
+		flavor(73.4, 0.0, "YARD BOOTH // SHIFT LOG\n\"All quiet.\" (x2,190)"),
 	]
 
 func get_spawns() -> Array[Dictionary]:

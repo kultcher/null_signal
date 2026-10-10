@@ -44,6 +44,8 @@ var preview_sections: Array[FacilitySection] = []
 var preview_signals: Array[Dictionary] = []
 var draw_route := true
 var model_scale := 1.0
+# Preview only: print every flavor object's text instead of waiting for hover.
+var show_flavor_text := false
 
 var _font: Font = preload("res://Visuals/Fonts/ShareTechMono-Regular.ttf")
 var _clip := Rect2()
@@ -82,6 +84,8 @@ func _draw() -> void:
 		_draw_floor(room, left_cell, right_cell)
 	for room in rooms:
 		_draw_props(room)
+	var flavor := _visible_flavor(sections)
+	_draw_flavor_models(flavor)
 	_draw_signal_models()
 	if draw_route:
 		for section in sections:
@@ -96,8 +100,84 @@ func _draw() -> void:
 			_draw_walls(room, section)
 	for room in rooms:
 		_draw_label(room)
+	_draw_flavor(flavor)
 	if not preview_mode:
 		_draw_feed_label(sections[0])
+
+# --- flavor objects ---
+# Small grey dots with a line of hover text (see RunDefinition.flavor()).
+# Drawn by the map rather than as signals: they have no gameplay behavior.
+
+const FLAVOR_DOT_RADIUS := 5.0
+const FLAVOR_HOVER_RADIUS := 16.0
+const FLAVOR_DOT_COLOR := Color(0.62, 0.66, 0.68, 0.85)
+const FLAVOR_RING_COLOR := Color(0.62, 0.66, 0.68, 0.3)
+const FLAVOR_TEXT_COLOR := Color(0.72, 0.76, 0.77, 0.95)
+const FLAVOR_PANEL_COLOR := Color(0.02, 0.04, 0.05, 0.9)
+const FLAVOR_TEXT_SIZE := 13
+const FLAVOR_TEXT_MAX_WIDTH := 280.0
+# Viewer: below this zoom, labels-on shows dots only (hover still works).
+const FLAVOR_TEXT_MIN_ZOOM := 0.45
+
+func _visible_flavor(sections: Array[FacilitySection]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if not preview_mode:
+		# Flavor hides with the signals (cutscenes, blackouts).
+		var signal_manager = CommandDispatch.signal_manager
+		if signal_manager != null and not signal_manager.visible:
+			return result
+	for section in sections:
+		result.append_array(timeline_manager.facility_layout.get_flavor_in_section(section))
+	return result
+
+func _draw_flavor_models(flavor: Array[Dictionary]) -> void:
+	for item in flavor:
+		var model_name: StringName = item.get("model", &"")
+		var model := WireframeModels.get_model(model_name)
+		if model.is_empty():
+			continue
+		var rot := int(item.get("rot", 0))
+		var size_cells := WireframeModels.get_footprint_cells(model_name, rot)
+		var center := _to_screen(float(item["cell"]), float(item["lane"]))
+		var size := Vector2(size_cells.x * timeline_manager.cell_width_px, size_cells.y * timeline_manager.lane_height)
+		_draw_model(model, Rect2(center - size * 0.5, size), Color.WHITE, rot)
+
+func _draw_flavor(flavor: Array[Dictionary]) -> void:
+	if flavor.is_empty():
+		return
+	var mouse := get_local_mouse_position()
+	var hovered := -1
+	var best := FLAVOR_HOVER_RADIUS
+	for i in flavor.size():
+		var pos := _to_screen(float(flavor[i]["cell"]), float(flavor[i]["lane"]))
+		if not _clip.has_point(pos):
+			continue
+		draw_circle(pos, FLAVOR_DOT_RADIUS + 3.0, FLAVOR_RING_COLOR, false, 1.0)
+		draw_circle(pos, FLAVOR_DOT_RADIUS, FLAVOR_DOT_COLOR)
+		var dist := pos.distance_to(mouse)
+		if dist <= best:
+			best = dist
+			hovered = i
+		if preview_mode and show_flavor_text and model_scale >= FLAVOR_TEXT_MIN_ZOOM:
+			_draw_flavor_text(pos, String(flavor[i]["text"]))
+	if hovered >= 0 and not (preview_mode and show_flavor_text and model_scale >= FLAVOR_TEXT_MIN_ZOOM):
+		var pos := _to_screen(float(flavor[hovered]["cell"]), float(flavor[hovered]["lane"]))
+		_draw_flavor_text(pos, String(flavor[hovered]["text"]))
+
+# Text box just right of (or left of, near the edge) the dot.
+func _draw_flavor_text(anchor: Vector2, text: String) -> void:
+	if text.is_empty():
+		return
+	var text_size := _font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, FLAVOR_TEXT_MAX_WIDTH, FLAVOR_TEXT_SIZE)
+	var pad := Vector2(8.0, 6.0)
+	var box := Rect2(anchor + Vector2(14.0, -text_size.y * 0.5 - pad.y), text_size + pad * 2.0)
+	if box.end.x > _clip.end.x:
+		box.position.x = anchor.x - 14.0 - box.size.x
+	box.position.y = clampf(box.position.y, _clip.position.y, maxf(_clip.position.y, _clip.end.y - box.size.y))
+	draw_rect(box, FLAVOR_PANEL_COLOR, true)
+	draw_rect(box, FLAVOR_RING_COLOR, false, 1.0)
+	var ascent := _font.get_ascent(FLAVOR_TEXT_SIZE)
+	draw_multiline_string(_font, box.position + Vector2(pad.x, pad.y + ascent), text, HORIZONTAL_ALIGNMENT_LEFT, FLAVOR_TEXT_MAX_WIDTH, FLAVOR_TEXT_SIZE, -1, FLAVOR_TEXT_COLOR)
 
 # --- helpers ---
 

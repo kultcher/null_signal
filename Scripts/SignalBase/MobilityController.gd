@@ -166,6 +166,35 @@ func _move_toward(target_cell_x: float, target_lane_pos: float, delta: float) ->
 	active_sig.runtime_lane = int(round(lane_target))
 	return true
 
+# Where the signal is currently headed, in (cell, lane), for the on-map
+# heading hint. Returns {} when it has nowhere to go (stationary, disabled).
+# "waiting" is true while dwelling at a patrol point; the destination is then
+# the next point it will walk to.
+func get_current_destination() -> Dictionary:
+	if _mobility == null or _mobility.patrol_points.is_empty() or active_sig == null:
+		return {}
+	if active_sig.is_disabled or _mobility.movement_disabled:
+		return {}
+	var target := Vector2.ZERO
+	var waiting := false
+	match _state:
+		State.PATROL:
+			var point: MobilityPatrolPoint = _mobility.patrol_points[_patrol_index]
+			target = Vector2(point.cell_x, point.lane)
+			waiting = _dwell_timer > 0.0
+		State.RESPONDING_ALERT:
+			target = Vector2(_alert_destination_cell_x, _alert_destination_lane_pos)
+		State.INVESTIGATING:
+			return {}
+		State.RETURNING_TO_PATROL:
+			var index := _return_patrol_index if _return_patrol_index >= 0 else _find_nearest_patrol_index()
+			var point: MobilityPatrolPoint = _mobility.patrol_points[index]
+			target = Vector2(point.cell_x, point.lane)
+	var here := Vector2(active_sig.runtime_cell_x, active_sig.runtime_lane_pos)
+	if here.distance_to(target) < 0.01:
+		return {}
+	return {"position": target, "waiting": waiting}
+
 func _update_facing(dir: Vector2) -> void:
 	if dir.length_squared() <= 0.0001:
 		return

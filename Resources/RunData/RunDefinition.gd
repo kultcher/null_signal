@@ -259,7 +259,20 @@ func section(section_id: String, start_cell: float, end_cell: float) -> SectionB
 	return SectionBuilder.new(section_id, start_cell, end_cell)
 
 func build_facility_layout() -> FacilityLayout:
-	return FacilityLayout.new(get_rooms(), get_sections())
+	var layout := FacilityLayout.new(get_rooms(), get_sections())
+	layout.flavor = get_flavor()
+	return layout
+
+# Flavor objects: small grey dots with a line of hover text that make a space
+# feel inhabited ("CHARGING... 1,400 DAYS"). Not signals: they can't be
+# scanned, connected to or interacted with, and never affect gameplay.
+func get_flavor() -> Array[Dictionary]:
+	return []
+
+# One flavor object at (cell, lane). Optional `model` draws a library prop
+# under the dot at its default size (rot as for RoomBuilder.place()).
+func flavor(cell: float, lane: float, text: String, model: StringName = &"", rot: int = 0) -> Dictionary:
+	return {"cell": cell, "lane": lane, "text": text, "model": model, "rot": rot}
 
 func spawn(signal_data: SignalData, cell_index: float) -> SpawnBuilder:
 	return SpawnBuilder.new(self, signal_data, cell_index)

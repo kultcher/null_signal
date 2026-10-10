@@ -227,7 +227,7 @@ func load_preview(path: String) -> bool:
 	_sync_sections()
 	_sync_start_point()
 	_update_inspector()
-	status.text = "%s | %d signals | %d sections | Authored preview; gameplay frozen. Reload updates this preview only." % [run.get_display_name(), entries.size(), layout.sections.size()]
+	status.text = "%s | %d signals | %d sections | runtime %s at base speed | Authored preview; gameplay frozen. Reload updates this preview only." % [run.get_display_name(), entries.size(), layout.sections.size(), format_runtime(layout.get_total_length())]
 	_redraw()
 	return true
 
@@ -247,10 +247,27 @@ func _select_run(index: int) -> void:
 
 func _sync_sections() -> void:
 	section_picker.clear()
-	section_picker.add_item("All sections")
+	section_picker.add_item("All sections  (%s)" % format_runtime(facility_layout.get_total_length()))
 	for section in facility_layout.sections:
-		section_picker.add_item(section.label if not section.label.is_empty() else section.id)
+		var name := section.label if not section.label.is_empty() else section.id
+		section_picker.add_item("%s  (%s)" % [name, format_runtime(section.path_length)])
 	section_picker.select(section_index + 1)
+
+# --- runtime ---
+# Walking time at the run's base speed: no hustle, holds, doors or dialogue.
+
+func base_cells_per_second() -> float:
+	var timeline = get_parent().get_node_or_null("SignalTimeline/TimelineManager")
+	if timeline == null:
+		return 0.15
+	return maxf(0.001, float(timeline.BASE_CELLS_PER_SECOND))
+
+func runtime_seconds(path_cells: float) -> float:
+	return path_cells / base_cells_per_second()
+
+func format_runtime(path_cells: float) -> String:
+	var total := int(round(runtime_seconds(path_cells)))
+	return "%d:%02d" % [total / 60, total % 60]
 
 func _select_section(index: int) -> void:
 	section_index = index - 1
@@ -494,7 +511,7 @@ func _sync_start_point() -> void:
 		start_location["segment"] = segment
 		start_position = section.path_points[segment].lerp(section.path_points[segment + 1], start_location["t"])
 		restart_button.disabled = false
-		coordinates.text = "START HERE  %s | cell %.2f | lane %.2f | path %.2f cells. Restart here creates a fresh, playable run." % [section.label, start_position.x, start_position.y, facility_layout.progress_from_location(start_location)]
+		coordinates.text = "START HERE  %s | cell %.2f | lane %.2f | path %.2f cells (%s). Restart here creates a fresh, playable run." % [section.label, start_position.x, start_position.y, facility_layout.progress_from_location(start_location), format_runtime(facility_layout.progress_from_location(start_location))]
 		return
 	start_location.clear()
 
@@ -514,6 +531,7 @@ func _redraw() -> void:
 	map_layer.preview_sections = visible_sections()
 	map_layer.preview_signals = visible_entries()
 	map_layer.draw_route = route_toggle.button_pressed
+	map_layer.show_flavor_text = labels_toggle.button_pressed
 	map_layer.model_scale = zoom
 	map_layer.queue_redraw()
 	overlay.queue_redraw()

@@ -160,7 +160,7 @@ func _draw_route_distances() -> void:
 				progress += viewer.facility_layout.segment_length(section.path_points[i - 1], section.path_points[i])
 			var point: Vector2 = viewer.cell_lane_to_screen(section.path_points[i].x, section.path_points[i].y)
 			if rect.has_point(point) and point.distance_to(previous) > 65.0:
-				_label(point + Vector2(4.0, 18.0), "path %.1f" % progress, Color(0.2, 0.8, 1.0), 12)
+				_label(point + Vector2(4.0, 18.0), "path %.1f  %s" % [progress, viewer.format_runtime(progress)], Color(0.2, 0.8, 1.0), 12)
 				previous = point
 
 func _draw_ruler() -> void:
