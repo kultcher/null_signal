@@ -6,12 +6,15 @@ var rng := RandomNumberGenerator.new()
 var matrix: Array[Dictionary] = []
 var bag: Array[Dictionary] = []
 var sampled_combinations := false
+var encounter_matrix: Array[Dictionary] = []
+var encounter_bag: Array[Dictionary] = []
 
 func configure(values: GauntletSettings) -> void:
 	settings = values.normalized_copy()
 	rng.seed = settings.shuffle_seed
 	matrix.clear()
 	bag.clear()
+	encounter_bag.clear()
 	sampled_combinations = false
 	if settings.include_baseline:
 		matrix.append(_case())
@@ -41,6 +44,8 @@ func configure(values: GauntletSettings) -> void:
 				matrix.append(_random_case())
 	if matrix.is_empty():
 		matrix.append(_case())
+	matrix = _with_leads(matrix)
+	_build_encounters()
 
 func next_case() -> Dictionary:
 	if bag.is_empty():
@@ -50,6 +55,7 @@ func next_case() -> Dictionary:
 				matrix.append(_case())
 			for i in MAX_MATRIX:
 				matrix.append(_random_case())
+			matrix = _with_leads(matrix)
 		bag = matrix.duplicate(true)
 		for i in range(bag.size() - 1, 0, -1):
 			var j := rng.randi_range(0, i)
@@ -86,3 +92,36 @@ func _random_case() -> Dictionary:
 
 func _case(modules: Array = [], puzzle: String = "none", difficulty: int = 0) -> Dictionary:
 	return {"ic": modules.duplicate(true), "puzzle": puzzle, "difficulty": difficulty}
+
+# Window sweep: every case runs at every configured lead distance (-1 = the
+# screen edge when none are configured).
+func _with_leads(cases: Array[Dictionary]) -> Array[Dictionary]:
+	var leads: Array = Array(settings.lead_cells) if not settings.lead_cells.is_empty() else [-1.0]
+	var result: Array[Dictionary] = []
+	for case in cases:
+		for lead in leads:
+			var copy := case.duplicate(true)
+			copy["lead"] = float(lead)
+			result.append(copy)
+	return result
+
+func _build_encounters() -> void:
+	encounter_matrix.clear()
+	var leads: Array = Array(settings.lead_cells) if not settings.lead_cells.is_empty() else [-1.0]
+	for template in settings.encounter_pool:
+		for lead in leads:
+			encounter_matrix.append({"template": template, "lead": float(lead)})
+
+# Shuffled bag of template x lead; each draw gets its own generation seed so a
+# repeat can rebuild the exact same placement.
+func next_encounter() -> Dictionary:
+	if encounter_bag.is_empty():
+		encounter_bag = encounter_matrix.duplicate(true)
+		for i in range(encounter_bag.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var swap := encounter_bag[i]
+			encounter_bag[i] = encounter_bag[j]
+			encounter_bag[j] = swap
+	var case: Dictionary = encounter_bag.pop_back()
+	case["seed"] = rng.randi()
+	return case

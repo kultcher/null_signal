@@ -102,8 +102,8 @@ requirements once walls block sight (see the LOS notes below).
 
 ## Next steps
 
-1. Gauntlet spawns templates instead of a lone door (see
-   `FutureDirections.md` for the other gauntlet expansions).
+1. Done: the gauntlet can run encounter templates (see
+   `CalibrationGauntlet.md`).
 2. Viewer: seed field + Regenerate for generated runs; encounter footprints as
    an overlay.
 3. First generator pass: fill an authored layout with templates under a

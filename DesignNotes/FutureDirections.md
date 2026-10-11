@@ -61,20 +61,13 @@ Done: sections have an `entry` field (`hot` / `safe`, not acted on yet) and
 encounter instances carry stop points (see `EncounterTemplates.md`), so either
 direction can be added later.
 
-## Gauntlet expansions (revisit after encounter templates)
+## Gauntlet expansions
 
-- Spawn **encounter templates** instead of a lone door (door + camera first),
-  so calibration measures the units proc-gen places.
-- **Cadence**: obstacles in quick succession; measure throughput and backlog
-  (time visible before first engagement).
-- **Window sweep**: vary spawn distance; record success rate vs decision
-  window (fixes survivor bias of solve-time medians).
-- **Predicted cost per trial** (CostTable at spawn) and log the residual; turns
-  combination trials into additivity tests.
-- **Exposure counts** per tester per element, across sessions (first-time vs
-  practiced cost). Make tester/skill tags sticky between sessions.
-- **Camera host** for Reboot / Heartbeat / Tripwire (door can't trigger them).
-- **Watcher-only trials** to observe bypass choices (hack, hold, hustle, tank).
-- Optional one-key **felt-difficulty rating** after each trial.
-- Collection: isolated mode, tiers 1-2, ~5 samples per key (~125 trials, 2-3
-  sessions); flag warm-up trials; log trial index for fatigue.
+Done (see `CalibrationGauntlet.md`): encounter trials, cadence, window sweep,
+predicted cost per trial, exposure counts, sticky tester, camera host for
+Reboot / Heartbeat / Tripwire, felt-difficulty rating, warm-up flag and
+session index. Watcher-only bypass behavior is observable through camera
+corridor encounters (holds, speed and heat are logged per encounter).
+
+Collection: isolated mode, tiers 1-2, ~5 samples per key (~125 trials, 2-3
+sessions); encounters and window sweeps after that.
