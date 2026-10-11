@@ -291,6 +291,7 @@ func threat_details(data: SignalData) -> String:
 		text += "\nRoute %.1f-%.1f (cells %.1f-%.1f) watched %d%%" % [interval["from"], interval["to"], interval["from_cell"], interval["to_cell"], int(round(interval["max_ratio"] * 100.0))]
 	if report["reach"] == "certain" or report["reach"] == "possible":
 		text += "\nSeen if passed: walk %d%% | hustle %d%%" % [int(round(report["hit_walk"] * 100.0)), int(round(report["hit_hustle"] * 100.0))]
+		text += "\nTime seen per pass: walk %.1fs | hustle %.1fs" % [report["exposure_walk"], report["exposure_hustle"]]
 		text += "\nInteract at route %.1f, threat at %.1f" % [report["interact_progress"], report["threat_progress"]]
 		text += "\nDecision window: %.1fs walk | %.1fs hustle" % [report["window_walk"], report["window_hustle"]]
 	var estimate: Dictionary = cost_estimates.get(data.system_id, {})

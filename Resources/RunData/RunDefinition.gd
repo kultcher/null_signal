@@ -68,6 +68,11 @@ class SpawnBuilder extends RefCounted:
 		_spawn["patrol_points"] = _run.make_patrol_route(point1, point2, point3, point4)
 		return self
 
+	func patrol_mode(mode: MobilityComponent.PatrolMode) -> SpawnBuilder:
+		var mobility := _get_or_create_mobility_override()
+		mobility.patrol_mode = mode
+		return self
+
 	func add_ic(name: StringName, difficulty: int) -> SpawnBuilder:
 		return _add_ic_module(_run.build_ic(name, difficulty))
 
@@ -213,6 +218,11 @@ class SectionBuilder extends RefCounted:
 	# Runner route through the section as (cell, lane) waypoints.
 	func path(points: Array[Vector2]) -> SectionBuilder:
 		_section.path_points = PackedVector2Array(points)
+		return self
+
+	# &"hot" (default) or &"safe"; see FacilitySection.entry.
+	func entry(value: StringName) -> SectionBuilder:
+		_section.entry = value
 		return self
 
 	func build() -> FacilitySection:

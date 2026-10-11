@@ -17,6 +17,11 @@ var end_cell: float = 0.0
 # Runner route through this section, in (cell, lane) points.
 var path_points: PackedVector2Array = PackedVector2Array()
 
+# How the runner enters this section. "hot": straight in (current behavior).
+# "safe": reserved for the planned hold + relay preview at the section start
+# (see DesignNotes/FutureDirections.md); not acted on yet.
+var entry: StringName = &"hot"
+
 # Filled in by FacilityLayout: path length (in cells) before this section
 # starts, and this section's own path length.
 var progress_start: float = 0.0
