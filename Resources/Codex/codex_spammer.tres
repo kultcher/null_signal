@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CodexEntry" format=3]
+
+[ext_resource type="Texture2D" path="res://Visuals/Icons/Simple/radar-blank.svg" id="1"]
+[ext_resource type="Script" path="res://Scripts/codex_entry.gd" id="2"]
+
+[resource]
+script = ExtResource("2")
+codex_id = &"spammer"
+title = "Spammer"
+category = "IC"
+extra = "Session disruption"
+icon = ExtResource("1")
+body_text = "Unsolicited windows obstruct the timeline or terminal while this session is open, including in the background. Close them to clear space or disconnect the host to unsubscribe."

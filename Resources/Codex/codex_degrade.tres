@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CodexEntry" format=3]
+
+[ext_resource type="Texture2D" path="res://Visuals/Icons/Simple/radar-blank.svg" id="1"]
+[ext_resource type="Script" path="res://Scripts/codex_entry.gd" id="2"]
+
+[resource]
+script = ExtResource("2")
+codex_id = &"degrade"
+title = "Degrade"
+category = "IC"
+extra = "Session disruption"
+icon = ExtResource("1")
+body_text = "Terminal characters, including your input display, decay into noise over time. Your real command stays intact. Disconnect and reconnect to restore channel integrity."

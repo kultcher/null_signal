@@ -1,0 +1,9 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/run_main.tscn" id="1"]
+[ext_resource type="Script" path="res://Scripts/Debug/disruptive_ic_lab.gd" id="2"]
+
+[node name="DisruptiveICLab" type="Node"]
+script = ExtResource("2")
+
+[node name="Game" parent="." instance=ExtResource("1")]
