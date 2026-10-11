@@ -530,6 +530,12 @@ func _create_ic_module(name: String) -> ICModule:
 		"heartbeat": func() -> ICModule: return HeartbeatModule.new(),
 		"tether": func() -> ICModule: return TetherModule.new(),
 		"shy": func() -> ICModule: return ShyModule.new(),
+		"lag": func() -> ICModule: return LagModule.new(),
+		"spammer": func() -> ICModule: return SpammerModule.new(),
+		"degrade": func() -> ICModule: return DegradeModule.new(),
+		"blackout": func() -> ICModule: return BlackoutModule.new(),
+		"glitch": func() -> ICModule: return GlitchModule.new(),
+		"redact": func() -> ICModule: return RedactModule.new(),
 	}
 	var factory = factory_map.get(name, null)
 	if factory == null:

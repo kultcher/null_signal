@@ -364,13 +364,13 @@ func _draw_signal_models() -> void:
 	if signal_manager == null or not signal_manager.visible:
 		return
 	for active_sig in signal_manager.signal_queue:
-		if active_sig == null or active_sig.instance_node == null:
+		if active_sig == null or active_sig.instance_node == null or not active_sig.instance_node.visible:
 			continue
 		var model := WireframeModels.get_model(WireframeModels.model_for_signal(active_sig.data))
 		if model.is_empty():
 			continue
 		var size: Vector2 = model["size"]
-		var center: Vector2 = active_sig.instance_node.position
+		var center: Vector2 = active_sig.instance_node.get_display_position()
 		var tint := MODEL_DISABLED_MULT if active_sig.is_disabled else Color.WHITE
 		_draw_model(model, Rect2(center - size * 0.5, size), tint)
 

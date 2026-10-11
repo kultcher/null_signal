@@ -65,7 +65,10 @@ var root_signal: ActiveSignal
 var root_session: TerminalSession
 
 var _takeover_controller: TerminalTakeoverController
+var disruptions: SessionDisruptionController
+var _history_source := "" # Canonical display text, including transient lines.
 var _connection_flow_serial := 0
+var _connection_flow_target: ActiveSignal
 var _connection_send_locked := false
 var _buffered_command_text := ""
 var _buffered_command_signal: ActiveSignal = null
@@ -96,11 +99,16 @@ func _ready():
 	_set_tab_session(0, root_session)
 	_takeover_controller = TerminalTakeoverController.new(self, command_line, history, title_bar, title_text)
 	_takeover_controller.set_session_context(active_session, root_signal)
+	disruptions = SessionDisruptionController.new()
+	add_child(disruptions)
+	disruptions.initialize(self)
 	_refresh_prefix()
 	_refresh_signal_detail_panel()
 
-func _exit_tree() -> void:
-	if root_signal != null:
+func _notification(what: int) -> void:
+	# Hardware presentation reparents this terminal during setup. Leaving the
+	# tree for that move is not the end of its session lifetime.
+	if what == NOTIFICATION_PREDELETE and root_signal != null:
 		root_signal.release_run_state()
 
 func _process(_delta: float) -> void:
@@ -114,7 +122,7 @@ func switch_session(new_sig: ActiveSignal, show_connection_banner: bool = false)
 	if active_signal == new_sig:
 		_refresh_prefix()
 		_focus_command_line()
-		if not _connection_send_locked:
+		if not is_connection_pending(new_sig):
 			connection_ready.emit(new_sig)
 		return
 
@@ -177,10 +185,10 @@ func print_to_root(text: String):
 
 func print_to_log(text: String):
 	active_session.history.append(text)
-	history.append_text(text + "\n")
+	_append_history_text(text + "\n")
 
 func print_unlogged(text: String):
-	history.append_text(text + "\n")
+	_append_history_text(text + "\n")
 
 func print_transient(text: String) -> void:
 	if text.is_empty():
@@ -190,7 +198,10 @@ func print_transient(text: String) -> void:
 func play_system_dump(text: String, initial_cps: float = 100.0, max_cps: float = 500.0) -> void:
 	if _takeover_controller == null:
 		return
+	disruptions.presentation_suspended = true
 	await _takeover_controller.play_system_dump(text, initial_cps, max_cps)
+	_history_source = history.text
+	disruptions.presentation_suspended = false
 
 func estimate_type_duration(text: String, delay: float) -> float:
 	if _takeover_controller == null:
@@ -200,11 +211,28 @@ func estimate_type_duration(text: String, delay: float) -> float:
 func play_null_spike_sync(text: String, delay: float = 0.01) -> void:
 	if _takeover_controller == null:
 		return
+	disruptions.presentation_suspended = true
 	await _takeover_controller.play_null_spike_sync(text, delay)
+	_history_source = history.text
+	disruptions.presentation_suspended = false
 	return
 
+func _set_history_text(text: String) -> void:
+	_history_source = text
+	if disruptions != null and not disruptions.presentation_suspended:
+		history.text = disruptions.terminal_text(active_signal, text)
+	else:
+		history.text = text
+
+func _append_history_text(text: String) -> void:
+	_history_source += text
+	if disruptions != null and (disruptions.has_effect(active_signal, &"redact") or disruptions.has_effect(active_signal, &"degrade")):
+		_set_history_text(_history_source)
+	else:
+		history.append_text(text)
+
 func clear_log():
-	history.text = ""
+	_set_history_text("")
 
 func _print_connection_flow(target_sig: ActiveSignal) -> void:
 	var lines := Jargonizer.build_connection_flow(target_sig)
@@ -215,6 +243,7 @@ func _play_connection_flow(target_sig: ActiveSignal) -> void:
 	_connection_flow_serial += 1
 	var flow_serial := _connection_flow_serial
 	_connection_send_locked = true
+	_connection_flow_target = target_sig
 	_clear_buffered_command()
 	_stream_connection_flow_async(target_sig, flow_serial)
 
@@ -233,7 +262,7 @@ func _stream_connection_flow_async(target_sig: ActiveSignal, flow_serial: int) -
 
 	var char_delay := CONNECTION_FLOW_TOTAL_DURATION / float(total_steps)
 	char_delay = minf(char_delay, CONNECTION_FLOW_MAX_STEP_DELAY)
-	var base_text = history.text
+	var base_text = _history_source
 	var reveal_progress: float = 0.0
 
 	while reveal_progress < total_steps:
@@ -252,16 +281,16 @@ func _stream_connection_flow_async(target_sig: ActiveSignal, flow_serial: int) -
 		var next_text := reveal_steps[min(current_step + 1, total_steps - 1)]
 		if current_text.ends_with("\n") and current_text != next_text:
 			reveal_progress += 1.0
-			history.text = base_text + reveal_steps[min(int(reveal_progress), total_steps - 1)]
+			_set_history_text(base_text + reveal_steps[min(int(reveal_progress), total_steps - 1)])
 			await get_tree().create_timer(minf(0.02, maxf(0.001, char_delay * 2.0))).timeout
 			continue
 
 		reveal_progress += delta / maxf(0.001, char_delay)
-		history.text = base_text + reveal_steps[min(int(reveal_progress), total_steps - 1)]
+		_set_history_text(base_text + reveal_steps[min(int(reveal_progress), total_steps - 1)])
 		await get_tree().process_frame
 
 	if flow_serial == _connection_flow_serial:
-		history.text = base_text + full_text + "\n"
+		_set_history_text(base_text + full_text + "\n")
 		active_session.history.append_array(lines)
 	_finish_connection_flow(flow_serial, target_sig)
 
@@ -286,13 +315,18 @@ func _finish_connection_flow(flow_serial: int, target_sig: ActiveSignal) -> void
 	if flow_serial != _connection_flow_serial:
 		return
 	_connection_send_locked = false
-	if target_sig != null and target_sig.data != null and target_sig.data.ic_modules != null:
+	_connection_flow_target = null
+	var session_open := target_sig != null and target_sig.terminal_session != null and target_sig.terminal_session.has_tab
+	if session_open and target_sig.data != null and target_sig.data.ic_modules != null:
 		target_sig.data.ic_modules.notify_connected(target_sig)
-	if active_signal == target_sig and target_sig != null and target_sig.terminal_session != null and target_sig.terminal_session.has_tab:
+	if session_open:
 		connection_ready.emit(target_sig)
 	# Record readiness and arm IC before dispatching a command queued during
 	# the reveal. Its timestamp belongs to the ready channel, not the animation.
 	_flush_buffered_command(target_sig, flow_serial)
+
+func is_connection_pending(target_sig: ActiveSignal) -> bool:
+	return _connection_send_locked and _connection_flow_target == target_sig
 
 func _clear_buffered_command() -> void:
 	_buffered_command_text = ""
@@ -314,11 +348,14 @@ func _flush_buffered_command(target_sig: ActiveSignal, flow_serial: int) -> void
 	if _buffered_command_flow_serial != flow_serial:
 		_clear_buffered_command()
 		return
+	if target_sig == null or target_sig.terminal_session == null or not target_sig.terminal_session.has_tab:
+		_clear_buffered_command()
+		return
 
 	var buffered_text := _buffered_command_text
 	_clear_buffered_command()
-	print_to_log("--[ " + buffered_text)
-	CommandDispatch.process_command(buffered_text, active_signal)
+	_print_to_signal(target_sig, "--[ " + buffered_text)
+	CommandDispatch.process_command(buffered_text, target_sig)
 
 func restore_session(session: TerminalSession):
 	if active_session == null: return
@@ -328,22 +365,22 @@ func restore_session(session: TerminalSession):
 	_select_tab_for_session(active_session)
 	clear_log()
 	for s in session.history:
-		history.text += s + "\n"
+		_append_history_text(s + "\n")
 	print_unlogged("---Reconnecting---\n")
 	_refresh_prefix()
 	_focus_command_line()
 	_refresh_signal_detail_panel()
 
 func set_context():	# add args later
-	history.text = Jargonizer.get_handshake()
+	_set_history_text(Jargonizer.get_handshake())
 	for i in 3:
 		await get_tree().create_timer(0.2).timeout
-		history.text += "."
-	history.text += "."
+		_append_history_text(".")
+	_append_history_text(".")
 	await get_tree().create_timer(0.2).timeout
-	history.text += "\nConnected."
+	_append_history_text("\nConnected.")
 	await get_tree().create_timer(0.2).timeout
-	history.text += "\nEnter command.\n"
+	_append_history_text("\nEnter command.\n")
 
 func _on_session_tabs_tab_clicked(tab: int) -> void:
 	var session = _get_tab_session(tab)
@@ -431,6 +468,8 @@ func get_tab_anchor_global_position(session: TerminalSession) -> Vector2:
 
 func _set_active_session(session: TerminalSession) -> void:
 	var previous_session := active_session
+	if disruptions != null and previous_session != session:
+		disruptions.activate_session(previous_session, session)
 	if previous_session == session:
 		active_session = session
 		active_signal = session.active_signal if session != null else root_signal
@@ -564,7 +603,7 @@ func _refresh_lock_panel(target_sig: ActiveSignal) -> void:
 			lock_icon.texture = PADLOCK_ICON
 			toolbox_button.disabled = false
 	lock_icon.self_modulate = lock_color
-	lock_label.text = target_sig.get_lock_status_label_text()
+	lock_label.text = disruptions.security_text(target_sig, target_sig.get_lock_status_label_text()) if disruptions != null else target_sig.get_lock_status_label_text()
 	lock_label.self_modulate = lock_color
 	_apply_panel_tint(lock_panel, lock_color, "_lock_panel_tint")
 
@@ -583,7 +622,7 @@ func _refresh_ic_panel(target_sig: ActiveSignal) -> void:
 	ic_progress.value = target_sig.get_ic_scan_progress_value()
 	ic_progress.self_modulate = ic_progress_color
 	ic_icon.self_modulate = ic_color
-	ic_label.text = target_sig.get_ic_status_detail_text()
+	ic_label.text = disruptions.security_text(target_sig, target_sig.get_ic_status_detail_text()) if disruptions != null else target_sig.get_ic_status_detail_text()
 	ic_label.self_modulate = ic_color
 	_apply_panel_tint(ic_panel, ic_color, "_ic_panel_tint")
 
@@ -628,23 +667,37 @@ func _on_signal_state_changed(signal_data) -> void:
 # SIGNALLED FUNCTIONS
 
 func _on_command_line_text_submitted(new_text: String) -> void:
-	if _connection_send_locked:
+	if is_connection_pending(active_signal):
 		_buffer_command_submit(new_text)
 		return
+	var origin := active_signal
 	print_to_log("--[ " + new_text)
 	CommandDispatch.process_command(new_text, active_signal)
+	if disruptions != null:
+		disruptions.clear_input_draft(origin)
 	command_line.clear()
 
-func _on_command_complete(cmd_context: CommandContext) -> void:
-	if cmd_context.active_sig != active_signal:		# ensure command signaldata matches terminal signaldata
+func submit_for_signal(text: String, target: ActiveSignal) -> void:
+	# Delayed Enter is still bound to its original connection, even if the
+	# player is currently viewing another tab.
+	if target == null or target.terminal_session == null or not target.terminal_session.has_tab or target.is_disabled:
 		return
-	for s in cmd_context.log_text:
-		print_to_log(s)
+	_print_to_signal(target, "--[ " + text)
+	CommandDispatch.process_command(text, target)
+
+func _print_to_signal(target: ActiveSignal, text: String) -> void:
+	if target == null or target.terminal_session == null:
+		return
+	target.terminal_session.history.append(text)
+	if target == active_signal:
+		_append_history_text(text + "\n")
+
+func _on_command_complete(cmd_context: CommandContext) -> void:
+	for text in cmd_context.log_text:
+		_print_to_signal(cmd_context.active_sig, text)
 
 func _on_command_error(error_msg: String, signal_context: ActiveSignal = null) -> void:
-	if signal_context != active_signal:
-		return
-	print_to_log("!! ERROR: " + error_msg)
+	_print_to_signal(signal_context, "!! ERROR: " + error_msg)
 
 func _refresh_prefix() -> void:
 	if prefix == null:

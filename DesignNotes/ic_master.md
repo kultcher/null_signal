@@ -1,3 +1,5 @@
+Implementation note: Lag, Spammer, Degrade, Blackout, Glitch and Redact are now implemented as session-scoped IC. See [DisruptiveIC.md](DisruptiveIC.md) for current behavior, tuning and the standalone lab. The concepts below include earlier sketches.
+
 - punish overcommitment
 - forced wait windows
 - shortened safe windows

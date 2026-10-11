@@ -25,6 +25,10 @@ var my_active_sig: ActiveSignal
 
 var is_disabled: bool = false
 var _shape_sweep_material: ShaderMaterial = null
+var _disruption_offset := Vector2.ZERO
+var _disruption_fake := false
+var _disruption_glitch := false
+var _tooltip_body_source := ""
 
 signal signal_interaction(data: SignalData)
 signal scan_toggle_requested(clicked_signal: ActiveSignal)
@@ -218,6 +222,7 @@ func initialize_tooltip():
 # Rebuild the tooltip from the signal's current scan state (e.g. after IC
 # wiped what had been revealed).
 func rebuild_tooltip() -> void:
+	_tooltip_body_source = ""
 	tooltip_main.tt_body.text = ""
 	tooltip_main.reset_panels()
 	initialize_tooltip()
@@ -226,7 +231,50 @@ func rebuild_tooltip() -> void:
 	_sync_ic_effects_visibility()
 
 func append_tooltip(info: String):
-	tooltip_main.tt_body.text += info + "\n"
+	_tooltip_body_source += info + "\n"
+	_refresh_disrupted_tooltip()
+
+func _refresh_disrupted_tooltip() -> void:
+	var text := _tooltip_body_source
+	var terminal = CommandDispatch.terminal_window
+	if terminal != null and terminal.get("disruptions") != null:
+		text = terminal.disruptions.security_text(my_active_sig, text)
+	if tooltip_main.tt_body.text != text:
+		tooltip_main.tt_body.text = text
+
+func apply_disruption_visuals(offset: Vector2, glitch: bool, fake: bool, blackout: bool) -> void:
+	# Shift the picture and its pointer target, never the entity root or its
+	# DetectionController collision shapes. Runner contact remains real.
+	var difference := offset - _disruption_offset
+	if not difference.is_zero_approx():
+		for child in get_children():
+			if child == detection_controller:
+				continue
+			if child is Node2D or child is Control:
+				child.position += difference
+	_disruption_offset = offset
+	if detection_controller.detection_poly != null:
+		detection_controller.detection_poly.position = offset.rotated(-detection_controller.rotation)
+	if _disruption_glitch != glitch or _disruption_fake != fake or not difference.is_zero_approx():
+		_disruption_glitch = glitch
+		_disruption_fake = fake
+		queue_redraw()
+	visible = not blackout
+	signal_icon.input_pickable = not blackout
+	tooltip_main.visible = not fake and not blackout
+	_refresh_disrupted_tooltip()
+
+func _draw() -> void:
+	if not _disruption_glitch:
+		return
+	var pip := _disruption_offset + Vector2(0, -35)
+	if _disruption_fake:
+		draw_arc(pip, 4.0, 0, TAU, 20, Color(0.45, 0.65, 0.7), 1.0, true)
+	else:
+		draw_circle(pip, 4.0, Color(0.2, 1.0, 1.0))
+
+func get_display_position() -> Vector2:
+	return position + _disruption_offset
 
 	
 func hide_tooltip():
@@ -277,6 +325,12 @@ func bring_to_front():
 		parent.move_child(self, parent.get_child_count() - 1)
 
 func _on_area_2d_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+	if _disruption_fake and event is InputEventMouseButton and event.pressed:
+		var terminal = CommandDispatch.terminal_window
+		if terminal != null and terminal.get("disruptions") != null:
+			terminal.disruptions.fake_clicked(my_active_sig, signal_icon.global_position)
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			signal_interaction.emit(my_active_sig)
@@ -288,6 +342,8 @@ func _on_area_2d_input_event(_viewport: Node, event: InputEvent, _shape_idx: int
 			tooltip_lock_requested.emit(my_active_sig)
 
 func _on_area_2d_mouse_entered() -> void:
+	if _disruption_fake:
+		return
 	_is_hovering_signal = true
 	hover_started.emit(my_active_sig)
 
@@ -302,7 +358,7 @@ func get_focus_rect() -> Rect2:
 	if rect_shape != null:
 		local_size = rect_shape.size
 
-	var center := get_global_transform_with_canvas().origin
+	var center := signal_icon.get_global_transform_with_canvas().origin
 	return Rect2(center - (local_size * 0.5), local_size)
 
 func set_session_indicator_state(state: int) -> void:
