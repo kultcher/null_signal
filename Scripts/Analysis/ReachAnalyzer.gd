@@ -17,6 +17,8 @@
 #   hit_walk / hit_hustle
 #              chance of being seen walking through at base speed / hustling,
 #              over evenly spaced phases of the signal's cycle.
+#   exposure_walk / exposure_hustle
+#              mean seconds seen per pass: a brief graze vs a long stare.
 #   interact_progress, threat_progress
 #              first route point where the player can see and touch it, and
 #              first route point it can threaten.
@@ -80,6 +82,8 @@ static func analyze_signal(layout: FacilityLayout, data: SignalData, cell: float
 		"max_ratio": 0.0,
 		"hit_walk": 0.0,
 		"hit_hustle": 0.0,
+		"exposure_walk": 0.0,
+		"exposure_hustle": 0.0,
 		"interact_progress": _interact_progress(layout, section, cell, params),
 		"threat_progress": -1.0,
 		"window_walk": INF,
@@ -145,8 +149,12 @@ static func analyze_signal(layout: FacilityLayout, data: SignalData, cell: float
 
 	var base_speed: float = params["base_speed"]
 	var hustle_speed: float = base_speed * float(params["hustle_mult"])
-	report["hit_walk"] = _hit_chance(layout, shapes, poses.size(), intervals, base_speed)
-	report["hit_hustle"] = _hit_chance(layout, shapes, poses.size(), intervals, hustle_speed)
+	var walk := _pass_stats(layout, shapes, poses.size(), intervals, base_speed)
+	var hustle := _pass_stats(layout, shapes, poses.size(), intervals, hustle_speed)
+	report["hit_walk"] = walk["chance"]
+	report["hit_hustle"] = hustle["chance"]
+	report["exposure_walk"] = walk["exposure"]
+	report["exposure_hustle"] = hustle["exposure"]
 	var lead: float = report["threat_progress"] - report["interact_progress"]
 	report["window_walk"] = lead / base_speed
 	report["window_hustle"] = lead / hustle_speed
@@ -293,7 +301,7 @@ static func _build_poses(data: SignalData, cell: float) -> Array:
 								candidate = move_index + move_dir
 							move_index = clampi(candidate, 0, points.size() - 1)
 				if sweep.is_empty() and det.follow_movement_facing and moved_dir != Vector2.ZERO:
-					facing = rad_to_deg(atan2(moved_dir.y * LANE_PX, moved_dir.x * CELL_PX))
+					facing = det.facing_for_direction(rad_to_deg(atan2(moved_dir.y * LANE_PX, moved_dir.x * CELL_PX)))
 		# Sweep.
 		if sweep.size() > 1:
 			if sweep_dwell > 0.0:
@@ -372,22 +380,28 @@ static func _covers(shapes: Dictionary, i: int, world: Vector2) -> bool:
 
 # Chance the runner is seen crossing the covered stretch at `speed`, over
 # evenly spaced phases of the signal's cycle.
-static func _hit_chance(layout: FacilityLayout, shapes: Dictionary, pose_count: int, intervals: Array, speed: float) -> float:
-	if pose_count <= 1:
-		return 1.0
+# Walks the runner through at `speed` from evenly spaced phases of the signal's
+# cycle. Returns {"chance": fraction of passes seen at all, "exposure": mean
+# seconds seen per pass}. Exposure separates a brief graze from a long stare.
+static func _pass_stats(layout: FacilityLayout, shapes: Dictionary, pose_count: int, intervals: Array, speed: float) -> Dictionary:
 	var start: float = intervals[0]["from"] - ROUTE_STEP
 	var finish: float = intervals[intervals.size() - 1]["to"] + ROUTE_STEP
 	var duration := (finish - start) / maxf(0.001, speed)
+	var phases := PHASES if pose_count > 1 else 1
 	var hits := 0
-	for k in PHASES:
-		var phase := float(k) / float(PHASES) * pose_count * POSE_DT
+	var seen_total := 0.0
+	for k in phases:
+		var phase := float(k) / float(phases) * pose_count * POSE_DT
 		var t := 0.0
+		var seen := 0.0
 		while t <= duration:
 			var point := layout.sample_position(start + t * speed)
 			var world := Vector2(point.x * CELL_PX, point.y * LANE_PX)
 			var index := int((phase + t) / POSE_DT) % pose_count
 			if _covers(shapes, index, world):
-				hits += 1
-				break
+				seen += POSE_DT
 			t += POSE_DT
-	return float(hits) / float(PHASES)
+		if seen > 0.0:
+			hits += 1
+		seen_total += seen
+	return {"chance": float(hits) / float(phases), "exposure": seen_total / float(phases)}

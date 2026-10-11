@@ -45,6 +45,7 @@ RunnerTeam 0.4 scale).
 | `reach` | `certain`, `possible`, `never`, `open` (unlocked door), `n/a` |
 | `intervals` | route stretches it covers: `from`/`to` in path progress, `from_cell`/`to_cell`, `max_ratio` = max fraction of its cycle any point there is watched |
 | `hit_walk` / `hit_hustle` | chance a runner passing at base speed / hustle is seen, over 24 evenly spaced phases of the signal's cycle |
+| `exposure_walk` / `exposure_hustle` | mean seconds seen per pass at walk / hustle: separates a brief graze (a sweep crossing the runner) from a long stare |
 | `interact_progress` | first route point where the player can see and touch it (on screen and within interaction range) |
 | `threat_progress` | first route point it can threaten |
 | `window_walk` / `window_hustle` | seconds between the two: the **decision window**. Negative = it threatens before it can be touched |
@@ -77,10 +78,10 @@ walked through, contacts logged): cam_01 3.42-4.57 vs 3.40-4.60 cells, door_01
 - Alerts, investigation and escalation spawns are ignored.
 - Runner holds and hustle mid-pass aren't modelled (only constant walk/hustle).
 - Walls don't block vision (they don't in gameplay either).
-- **Possible gameplay bug:** with `follow_movement_facing`, a mobile signal's
-  facing equals its movement angle, but the cone polygon is built pointing to
-  -x, so the cone trails behind the patroller. The analyzer reproduces gameplay
-  as-is. Worth a look before tuning patrol threats.
+- Fixed: cone-shaped patrollers (drones) used to look backwards. Cones are
+  built pointing to -x, so following the direction of travel needs +180 deg;
+  `DetectionComponent.facing_for_direction()` now handles it in gameplay and
+  in the analyzer. Arcs (guards) already pointed forward.
 
 ## Cost model (CostTable)
 

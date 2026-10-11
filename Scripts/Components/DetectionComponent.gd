@@ -51,6 +51,14 @@ func _set_shape_type(value: ShapeType) -> void:
 	shape_type = value
 	emit_changed()
 
+# Cones are built pointing to -x (facing 0 looks left, back toward the
+# runner); arcs point to +x. Converts a direction of travel (atan2 of the
+# movement, in degrees) to the facing that points this shape forward.
+func facing_for_direction(direction_deg: float) -> float:
+	if shape_type == ShapeType.CONE:
+		return wrapf(direction_deg + 180.0, -180.0, 180.0)
+	return direction_deg
+
 func _set_follow_movement_facing(value: bool) -> void:
 	follow_movement_facing = value
 	emit_changed()
@@ -90,7 +98,7 @@ func update_runtime(active_sig: ActiveSignal, delta: float, movement_facing_deg:
 		return
 	if patrol_points.is_empty():
 		if follow_movement_facing and movement_has_facing:
-			active_sig.runtime_detection_facing_deg = movement_facing_deg
+			active_sig.runtime_detection_facing_deg = facing_for_direction(movement_facing_deg)
 		return
 
 	if _dwell_timer > 0.0:

@@ -57,8 +57,9 @@ range to connect.
 - **Implementation:** reuse the level viewer's projection (fit section, zoom)
   and the map layer's preview mode in-game, with signal details hidden.
 
-Planned now: sections get an `entry` field and encounter templates get an
-optional stop-point slot, so either direction can be added later.
+Done: sections have an `entry` field (`hot` / `safe`, not acted on yet) and
+encounter instances carry stop points (see `EncounterTemplates.md`), so either
+direction can be added later.
 
 ## Gauntlet expansions (revisit after encounter templates)
 
