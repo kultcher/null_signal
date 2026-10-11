@@ -3,6 +3,11 @@ class_name GauntletSettings extends Resource
 # These modules can affect a single door without additional targets.
 const DOOR_IC := ["bouncer", "callback", "faraday", "haze", "trace", "shy", "siphon"]
 const PUZZLES := ["sniff", "decrypt", "fuzz"]
+# These need their host disabled (OP can't do that to a door), so they run on
+# a camera host on the route instead.
+const CAMERA_IC := ["reboot", "heartbeat", "tripwire"]
+const ENCOUNTERS := ["watched_door", "camera_corridor", "drone_patrol", "guard_patrol"]
+const MAX_LEAD_CELLS := 7.0
 
 @export var tester := "tester"
 @export var skill_tag := "unspecified"
@@ -23,11 +28,33 @@ const PUZZLES := ["sniff", "decrypt", "fuzz"]
 @export var reset_heat_each_trial := true
 @export var fuzz_config: FuzzPuzzleConfig
 
+# --- encounters, windows, session hygiene ---
+# "elements": one signal per trial (door or camera host). "encounters": whole
+# encounter templates (EncounterLibrary), each recorded as a group of trials.
+@export_enum("elements", "encounters") var trial_source := "elements"
+# Element host. "camera" puts a stationary camera on the route; it accepts the
+# door IC plus CAMERA_IC. Success = runner passes it unseen.
+@export_enum("door", "camera") var host := "door"
+@export var encounter_pool: PackedStringArray = PackedStringArray(ENCOUNTERS)
+@export_range(1, 5, 1) var encounter_difficulty := 1
+# Cadence: >0 spawns the next encounter this many seconds after the previous
+# one even if it's still active (up to max_concurrent). 0 = one at a time.
+@export_range(0, 120, 0.5) var cadence_sec := 0.0
+@export_range(1, 4, 1) var max_concurrent := 2
+# Window sweep: distances (cells ahead of the runner) to spawn at. Each case
+# is run at every distance. Empty = spawn at the screen edge.
+@export var lead_cells: PackedFloat32Array = PackedFloat32Array()
+# The first N trials/encounters of a session are flagged warm-up.
+@export_range(0, 20, 1) var warmup_trials := 3
+
+func available_ic() -> Array:
+	return DOOR_IC + CAMERA_IC if host == "camera" else DOOR_IC.duplicate()
+
 func normalized_copy() -> GauntletSettings:
 	var copy := duplicate(true) as GauntletSettings
 	copy.ic_pool = PackedStringArray()
 	for key in ic_pool:
-		if key in DOOR_IC and not key in copy.ic_pool:
+		if key in available_ic() and not key in copy.ic_pool:
 			copy.ic_pool.append(key)
 	copy.puzzle_pool = PackedStringArray()
 	for key in puzzle_pool:
@@ -42,4 +69,37 @@ func normalized_copy() -> GauntletSettings:
 	copy.breach_delay_sec = maxf(0.1, breach_delay_sec)
 	copy.next_delay_sec = maxf(0.0, next_delay_sec)
 	copy.runner_speed = maxf(0.01, runner_speed)
+	copy.trial_source = trial_source if trial_source in ["elements", "encounters"] else "elements"
+	copy.host = host if host in ["door", "camera"] else "door"
+	copy.encounter_pool = PackedStringArray()
+	for key in encounter_pool:
+		if key in ENCOUNTERS and not key in copy.encounter_pool:
+			copy.encounter_pool.append(key)
+	if copy.encounter_pool.is_empty():
+		copy.encounter_pool = PackedStringArray(ENCOUNTERS)
+	copy.encounter_difficulty = clampi(encounter_difficulty, 1, 5)
+	copy.cadence_sec = maxf(0.0, cadence_sec)
+	copy.max_concurrent = clampi(max_concurrent, 1, 4)
+	copy.lead_cells = PackedFloat32Array()
+	for lead in lead_cells:
+		var value := clampf(lead, 0.5, MAX_LEAD_CELLS)
+		if lead > 0.0 and not value in copy.lead_cells:
+			copy.lead_cells.append(value)
+	copy.lead_cells.sort()
+	copy.warmup_trials = maxi(0, warmup_trials)
 	return copy
+
+# "3, 5, 8" -> [3, 5, 8]; blank or invalid entries are dropped.
+static func parse_leads(text: String) -> PackedFloat32Array:
+	var result := PackedFloat32Array()
+	for part in text.split(",", false):
+		var token := part.strip_edges()
+		if token.is_valid_float() and float(token) > 0.0:
+			result.append(float(token))
+	return result
+
+static func format_leads(values: PackedFloat32Array) -> String:
+	var parts: Array[String] = []
+	for value in values:
+		parts.append(str(value))
+	return ", ".join(parts)

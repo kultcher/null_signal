@@ -28,12 +28,17 @@ def stats(values):
     return {"samples": len(values), "median": median(values), "p25": percentile(values, .25), "p75": percentile(values, .75), "p90": percentile(values, .9)}
 
 
+# Per-trial bookkeeping and generated secrets: never part of a tuning signature.
+VOLATILE_KEYS = {"cipher_text", "mapping_offset", "callback_sequence", "shuffle_seed", "coverage",
+                 "predicted", "exposure", "warmup", "session_index", "encounter", "window_sec"}
+
+
 def tuning_signature(config):
     # Generated secrets vary by instance, not tuning. Preserve them in raw logs.
     def clean(value):
         if isinstance(value, dict):
             return {key: clean(item) for key, item in value.items()
-                    if key not in {"cipher_text", "mapping_offset", "callback_sequence", "shuffle_seed", "coverage"}}
+                    if key not in VOLATILE_KEYS}
         if isinstance(value, list):
             return [clean(item) for item in value]
         return value
@@ -50,8 +55,9 @@ def overlap(start, end, intervals):
     return total
 
 
-def summarize(paths, tester=None, skill=None):
+def summarize(paths, tester=None, skill=None, include_warmup=False):
     trials, sessions, incomplete, warnings = [], [], [], []
+    encounters, ratings = [], {}
     for path in paths:
         current = {}
         with path.open(encoding="utf-8") as stream:
@@ -65,7 +71,12 @@ def summarize(paths, tester=None, skill=None):
                     continue
                 if event.get("event") == "run_started":
                     sessions.append(event)
-                if "trial" not in event:
+                if event.get("event") == "encounter_ended":
+                    encounters.append(event)
+                if event.get("event") == "rating":
+                    target = ("encounter", event.get("session"), event["encounter"]) if "encounter" in event else ("trial", event.get("session"), event.get("trial"))
+                    ratings[target] = event.get("rating")
+                if "trial" not in event or event.get("event") == "rating":
                     continue
                 key = (event.get("session"), event["trial"])
                 current.setdefault(key, []).append(event)
@@ -73,13 +84,22 @@ def summarize(paths, tester=None, skill=None):
                     trials.append((event, current.pop(key)))
         incomplete.extend(current.values())
     groups, components, residuals = {}, defaultdict(list), []
+    curve, prediction = defaultdict(list), defaultdict(list)
+    skipped_warmup = 0
     for result, events in trials:
         if tester and result.get("tester") != tester or skill and result.get("skill") != skill:
             continue
         config = result["config"]
+        if config.get("warmup") and not include_warmup:
+            skipped_warmup += 1
+            continue
+        in_encounter = bool(config.get("encounter"))
         signature = tuning_signature(config)
         key = (result["case_key"], signature, result.get("tester", ""), result.get("skill", ""))
-        group = groups.setdefault(key, {"case_key": key[0], "signature": signature, "tester": key[2], "skill": key[3], "config": config, "outcomes": defaultdict(int), "clear": [], "interaction": [], "failure_elapsed": [], "failed_commands": 0, "heat": 0.0})
+        group = groups.setdefault(key, {"case_key": key[0], "signature": signature, "tester": key[2], "skill": key[3], "config": config, "outcomes": defaultdict(int), "clear": [], "interaction": [], "failure_elapsed": [], "failed_commands": 0, "heat": 0.0, "ratings": []})
+        rating = ratings.get(("trial", result.get("session"), result.get("trial")))
+        if rating is not None:
+            group["ratings"].append(rating)
         outcome = result["outcome"]
         group["outcomes"][outcome] += 1
         group["failed_commands"] += result.get("failed_commands", 0)
@@ -91,6 +111,15 @@ def summarize(paths, tester=None, skill=None):
                 group["interaction"].append(result["interaction_to_clear_sec"])
         elif outcome == "breached":
             group["failure_elapsed"].append(result["spawn_to_end_sec"])
+        if not in_encounter and outcome not in {"skipped", "repeated", "interrupted"}:
+            lead = config.get("lead_cells", -1)
+            curve[(result["case_key"], lead, result.get("tester", ""), result.get("skill", ""))].append((outcome == "success", config.get("window_sec")))
+            predicted = (config.get("predicted") or {}).get("total")
+            if outcome == "success" and predicted is not None and result.get("interaction_to_clear_sec") is not None:
+                prediction[result["case_key"]].append((predicted, result["interaction_to_clear_sec"]))
+        # Encounter members are context, not isolated cost samples.
+        if in_encounter:
+            continue
         # Cost candidates use unassisted successes only. Failure durations are
         # censored observations, not solve times; retain them in group outcomes.
         if outcome != "success" or result.get("null_spike_used") or result.get("programs_used"):
@@ -160,7 +189,7 @@ def summarize(paths, tester=None, skill=None):
             residuals.append({"result": result, "duration": result["interaction_to_clear_sec"], "scan": scan_duration})
     group_rows = []
     for group in groups.values():
-        group_rows.append({"case_key": group["case_key"], "signature": group["signature"], "tester": group["tester"], "skill": group["skill"], "trials": sum(group["outcomes"].values()), "outcomes": dict(group["outcomes"]), "clear": stats(group["clear"]), "interaction": stats(group["interaction"]), "failure_elapsed": stats(group["failure_elapsed"]), "scan": stats(group.get("scan", [])), "background": stats(group.get("background", [])), "failed_commands": group["failed_commands"], "heat": group["heat"], "config": group["config"]})
+        group_rows.append({"case_key": group["case_key"], "signature": group["signature"], "tester": group["tester"], "skill": group["skill"], "trials": sum(group["outcomes"].values()), "outcomes": dict(group["outcomes"]), "clear": stats(group["clear"]), "interaction": stats(group["interaction"]), "failure_elapsed": stats(group["failure_elapsed"]), "scan": stats(group.get("scan", [])), "background": stats(group.get("background", [])), "failed_commands": group["failed_commands"], "heat": group["heat"], "rating": mean_or_none(group["ratings"]), "ratings": len(group["ratings"]), "config": group["config"]})
     component_rows = [{"key": key[0], "signature": key[1], "channel": key[2], **stats(values)} for key, values in sorted(components.items())]
     # IC residuals are whole-task overhead, not a defensible attention split.
     # Match baselines by tester, skill, speed and breach window.
@@ -180,7 +209,57 @@ def summarize(paths, tester=None, skill=None):
         delta = row["duration"] - row["scan"] - median([item["duration"] - item["scan"] for item in base])
         overhead[(key, tuning_signature(result["config"]))].append(delta)
     overhead_rows = [{"key": key[0], "signature": key[1], "classification": "unattributed_baseline_delta", **stats(values)} for key, values in sorted(overhead.items())]
-    return {"version": 1, "sessions": len(sessions), "incomplete_trials": len(incomplete), "groups": group_rows, "components": component_rows, "ic_overhead": overhead_rows, "warnings": warnings, "notes": ["Clear percentiles include successful trials only; consult breach counts and failure elapsed times for censoring.", "Component samples use unassisted successful isolated trials. Base costs use unprotected baselines only. Keep tester/skill filters consistent.", "Connect ends at connection_ready; command and Callback timing start there, excluding connection reveal time.", "Puzzle open-to-solve and Callback response are observed elapsed times, classified as blocking per ThreatAndCost; they are not measured cognitive attention.", "IC baseline deltas are descriptive overhead and are not automatically assigned to blocking/background.", "Same difficulty can have multiple tuning signatures; candidates require a single signature per component."]}
+    curve_rows = []
+    for (case_key, lead, row_tester, row_skill), samples in sorted(curve.items(), key=lambda item: (item[0][0], item[0][1])):
+        windows = [w for _, w in samples if w is not None]
+        successes = sum(1 for ok, _ in samples if ok)
+        curve_rows.append({"case_key": case_key, "lead_cells": lead, "tester": row_tester, "skill": row_skill, "trials": len(samples), "successes": successes, "success_rate": successes / len(samples), "window_sec": median(windows) if windows else None})
+    prediction_rows = []
+    for case_key, pairs in sorted(prediction.items()):
+        residual = [actual - predicted for predicted, actual in pairs]
+        prediction_rows.append({"case_key": case_key, "samples": len(pairs), "predicted": median(p for p, _ in pairs), "actual": median(a for _, a in pairs), "residual": stats(residual)})
+    encounter_rows = summarize_encounters(encounters, ratings, tester, skill, include_warmup)
+    return {"version": 2, "sessions": len(sessions), "incomplete_trials": len(incomplete), "warmup_trials_skipped": skipped_warmup, "groups": group_rows, "components": component_rows, "ic_overhead": overhead_rows, "window_curve": curve_rows, "prediction": prediction_rows, "encounters": encounter_rows, "warnings": warnings, "notes": ["Clear percentiles include successful trials only; consult breach counts and failure elapsed times for censoring.", "Component samples use unassisted successful isolated trials. Base costs use unprotected baselines only. Keep tester/skill filters consistent.", "Connect ends at connection_ready; command and Callback timing start there, excluding connection reveal time.", "Puzzle open-to-solve and Callback response are observed elapsed times, classified as blocking per ThreatAndCost; they are not measured cognitive attention.", "IC baseline deltas are descriptive overhead and are not automatically assigned to blocking/background.", "Same difficulty can have multiple tuning signatures; candidates require a single signature per component.", "Warm-up trials/encounters are excluded unless --include-warmup. Encounter member trials never feed component costs.", "window_curve: success rate per case and spawn lead (cells ahead; -1 = screen edge). prediction: observed interaction-to-clear minus the CostTable estimate made at spawn.", "encounters: outcome is the worst of damaged > breached > heated > clean; predicted_total assumes every member is solved."]}
+
+
+def mean_or_none(values):
+    return sum(values) / len(values) if values else None
+
+
+def wildcard_label(wildcard):
+    if not wildcard:
+        return "none"
+    return ",".join(f"{key}={wildcard[key]}" for key in sorted(wildcard) if key != "of")
+
+
+def summarize_encounters(events, ratings, tester=None, skill=None, include_warmup=False):
+    groups = {}
+    for event in events:
+        if tester and event.get("tester") != tester or skill and event.get("skill") != skill:
+            continue
+        if event.get("warmup") and not include_warmup:
+            continue
+        if event.get("outcome") in {"skipped", "repeated", "interrupted"}:
+            continue
+        key = (event.get("template"), wildcard_label(event.get("wildcard")), event.get("difficulty"), event.get("lead_cells", -1), event.get("tester", ""), event.get("skill", ""))
+        group = groups.setdefault(key, {"outcomes": defaultdict(int), "pass": [], "heat": [], "damage": 0.0, "predicted": [], "ratings": [], "concurrent": 0})
+        group["outcomes"][event["outcome"]] += 1
+        if event.get("visible_to_pass_sec") is not None:
+            group["pass"].append(event["visible_to_pass_sec"])
+        group["heat"].append(event.get("heat", 0.0))
+        group["damage"] += event.get("damage", 0.0)
+        if event.get("predicted_total") is not None:
+            group["predicted"].append(event["predicted_total"])
+        if (event.get("info") or {}).get("concurrent"):
+            group["concurrent"] += 1
+        rating = ratings.get(("encounter", event.get("session"), event.get("encounter")))
+        if rating is not None:
+            group["ratings"].append(rating)
+    rows = []
+    for key, group in sorted(groups.items(), key=lambda item: tuple(str(part) for part in item[0])):
+        total = sum(group["outcomes"].values())
+        rows.append({"template": key[0], "wildcard": key[1], "difficulty": key[2], "lead_cells": key[3], "tester": key[4], "skill": key[5], "encounters": total, "outcomes": dict(group["outcomes"]), "clean_rate": group["outcomes"].get("clean", 0) / total, "visible_to_pass": stats(group["pass"]), "heat": stats(group["heat"]), "damage": group["damage"], "predicted_total": median(group["predicted"]) if group["predicted"] else None, "rating": mean_or_none(group["ratings"]), "ratings": len(group["ratings"]), "overlapped": group["concurrent"]})
+    return rows
 
 
 def candidate_table(table, report, min_samples):
@@ -231,22 +310,26 @@ def main():
     parser.add_argument("--min-samples", type=int, default=5)
     parser.add_argument("--tester")
     parser.add_argument("--skill")
+    parser.add_argument("--include-warmup", action="store_true", help="keep warm-up trials/encounters")
     args = parser.parse_args()
     paths = sorted({p for item in args.inputs for p in (item.glob("*.jsonl") if item.is_dir() else [item])})
     if not paths:
         parser.error("No JSONL session files found")
     output = args.out or paths[0].parent / "summary"
     output.mkdir(parents=True, exist_ok=True)
-    report = summarize(paths, args.tester, args.skill)
+    report = summarize(paths, args.tester, args.skill, args.include_warmup)
     (output / "summary.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     write_csv(output / "trials_summary.csv", report["groups"])
     write_csv(output / "component_costs.csv", report["components"])
     write_csv(output / "ic_overhead.csv", report["ic_overhead"])
+    write_csv(output / "window_curve.csv", report["window_curve"])
+    write_csv(output / "prediction.csv", report["prediction"])
+    write_csv(output / "encounters.csv", report["encounters"])
     if args.table:
         table = json.loads(args.table.read_text(encoding="utf-8"))
         candidate = candidate_table(table, report, max(1, args.min_samples))
         (output / "cost_table_candidate.json").write_text(json.dumps(candidate, indent=2) + "\n", encoding="utf-8")
-    print(f"Summarized {len(paths)} sessions, {len(report['groups'])} groups; output: {output}")
+    print(f"Summarized {len(paths)} sessions, {len(report['groups'])} groups, {len(report['encounters'])} encounter groups; output: {output}")
     for warning in report["warnings"]:
         print("Warning:", warning)
 
