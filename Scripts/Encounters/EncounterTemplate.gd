@@ -26,7 +26,9 @@ const ROUTE_TOLERANCE := 0.3
 
 # Generates one placement. `rng` drives every random choice, so the same seed
 # reproduces the same encounter. `prefix` makes system ids unique.
-func generate(run: RunDefinition, anchor_cell: float, rng: RandomNumberGenerator, prefix: String = "") -> EncounterInstance:
+# `security_tier` 1-5 rolls the wildcard and randomized IC/puzzles from
+# EncounterSecurity; 0 keeps the authored setup (and always the wildcard).
+func generate(run: RunDefinition, anchor_cell: float, rng: RandomNumberGenerator, prefix: String = "", security_tier: int = 0) -> EncounterInstance:
 	var inst := EncounterInstance.new()
 	inst.template_id = template_id
 	inst.label = display_name.to_upper()
@@ -36,7 +38,11 @@ func generate(run: RunDefinition, anchor_cell: float, rng: RandomNumberGenerator
 	inst.end_cell = anchor_cell + get_base_length()
 	inst.route_lane = route_lane
 	inst.flipped = allow_flip and rng.randf() < 0.5
+	if security_tier > 0:
+		inst.wildcard_active = rng.randf() < EncounterSecurity.wildcard_chance(security_tier)
 	_build(run, inst, rng)
+	if security_tier > 0:
+		EncounterSecurity.apply(run, inst, rng, security_tier)
 	return inst
 
 # Length without the wildcard; _build may extend inst.end_cell.

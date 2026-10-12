@@ -7,6 +7,9 @@ extends RunDefinition
 # mirroring; each encounter's flavor dot describes what was rolled.
 
 const SEED := 1
+# 0 = each template's authored security; 1-5 = randomized (EncounterSecurity).
+# NULL_ENCOUNTER_TIER overrides.
+const SECURITY_TIER := 0
 const ORDER: Array[StringName] = [
 	&"camera_corridor", &"watched_door",
 	&"drone_patrol", &"watched_door",
@@ -26,7 +29,7 @@ func get_run_id() -> String:
 	return "encounter_gallery"
 
 func get_display_name() -> String:
-	return "Encounter gallery (seed %d)" % get_seed()
+	return "Encounter gallery (seed %d, %s)" % [get_seed(), "authored security" if get_tier() == 0 else "security T%d" % get_tier()]
 
 func is_escalation_enabled() -> bool:
 	return false
@@ -34,6 +37,10 @@ func is_escalation_enabled() -> bool:
 func get_seed() -> int:
 	var env := OS.get_environment("NULL_ENCOUNTER_SEED")
 	return int(env) if env.is_valid_int() else SEED
+
+func get_tier() -> int:
+	var env := OS.get_environment("NULL_ENCOUNTER_TIER")
+	return clampi(int(env) if env.is_valid_int() else SECURITY_TIER, 0, EncounterSecurity.MAX_TIER)
 
 func _plan() -> void:
 	if _planned:
@@ -44,7 +51,10 @@ func _plan() -> void:
 	var cursor := START_CELL
 	for i in ORDER.size():
 		var template := EncounterLibrary.make(ORDER[i])
-		var inst := template.generate(self, cursor, rng, "%s_%d" % [String(ORDER[i]).get_slice("_", 0), i])
+		var tier := get_tier()
+		if tier > 0:
+			template.difficulty = tier
+		var inst := template.generate(self, cursor, rng, "%s_%d" % [String(ORDER[i]).get_slice("_", 0), i], tier)
 		instances.append(inst)
 		if template is WatchedDoorTemplate:
 			_door_cells.append((template as WatchedDoorTemplate).get_door_cell(cursor))

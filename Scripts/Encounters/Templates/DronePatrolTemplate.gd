@@ -34,13 +34,14 @@ func get_max_length() -> float:
 	return get_base_length() + (wildcard_gap_cells + horizontal_span_cells if wildcard_enabled else 0.0)
 
 func _build(run: RunDefinition, inst: EncounterInstance, rng: RandomNumberGenerator) -> void:
+	var wild := wildcard_enabled and inst.wildcard_active
 	var pattern := "horizontal" if rng.randf() < 0.5 else "square"
 	var position := "lead" if rng.randf() < 0.5 else "tail"
 	var wild_span := 0.0
-	if wildcard_enabled:
+	if wild:
 		wild_span = horizontal_span_cells if pattern == "horizontal" else square_size_cells
 	var pair_start := inst.anchor_cell + lead_cells
-	if wildcard_enabled and position == "lead":
+	if wild and position == "lead":
 		pair_start += wild_span + wildcard_gap_cells
 
 	# The pair: tutorial c_drone_02 (lanes 0-3) and c_drone_03 (lanes 1-4),
@@ -60,7 +61,7 @@ func _build(run: RunDefinition, inst: EncounterInstance, rng: RandomNumberGenera
 	var pair_end := pair_start + pair_spacing_cells
 	inst.end_cell = pair_end + tail_cells
 
-	if not wildcard_enabled:
+	if not wild:
 		return
 	var wild_cell := inst.anchor_cell + lead_cells if position == "lead" else pair_end + wildcard_gap_cells
 	var builder: RunDefinition.SpawnBuilder

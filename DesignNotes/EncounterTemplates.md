@@ -68,6 +68,45 @@ from `ReachAnalyzer` over the gallery seeds.
 - Wildcard: none.
 - Profile: guards possible with low walk-through odds (~30%); camera never.
 
+## Randomized security (difficulty tiers)
+
+`Scripts/Encounters/EncounterSecurity.gd`. `template.generate(..., security_tier)`
+with tier 1-5 rolls the wildcard and replaces each hackable signal's IC and
+puzzle; tier 0 keeps the authored setup. Rolls use the encounter's RNG, so a
+seed reproduces them; results are in `inst.security` (and the description).
+
+Baseline table (design, 2026-10-12; to be retuned from gauntlet data):
+
+| Tier | IC per hackable signal | Puzzle tier | Wildcard |
+| --- | --- | --- | --- |
+| 1 | 75% one Tier I | 1-2 (70% 1) | 30% |
+| 2 | 90% at least one Tier I; 20% two Tier I or a Tier II | 2-3 (70% 2) | 45% |
+| 3 | all at least one Tier I; 50% two Tier I or a Tier II | 3-4 (70% 3) | 60% |
+| 4 | all two Tier I or a Tier II; +25% an extra Tier III | 4-5 (70% 4) | 75% |
+| 5 | all two Tier I or a Tier II; +50% an extra Tier III | 4-5 (70% 5) | 90% |
+
+- "Two Tier I or a Tier II" is a 50/50 split. Up to three distinct IC per
+  signal: stacking is intended, partly to find which IC don't combine well.
+- IC module difficulty per tier: 1, 1, 2, 2, 3 (placeholder until data).
+- Puzzles: doors (and terminals, once implemented; objective/paydata
+  terminals will usually be locked) always; cameras/drones sometimes (0%, 10%,
+  15%, 20%, 25% by tier); disruptors never. Guards aren't hackable.
+- Reboot, Heartbeat and Tripwire only go on things the player disables
+  (cameras, drones).
+- Wildcards apply to the templates that have one (camera corridor, drone
+  patrol).
+- IC tiers follow `ic_master.md`. Provisional (not tiered there yet): Shy and
+  Redact as Tier I; Siphon, Heartbeat, Tripwire, Tether and Glitch as Tier II.
+  Tier III: Blackout, Necromancer.
+- Puzzle difficulty above 2 currently maps to the same puzzle profiles (sniff
+  and decrypt distinguish 1 vs 2+; fuzz scales only with extra profiles), so
+  tiers 3-5 roll correctly but don't yet play harder. That's the next step.
+
+The gallery takes `SECURITY_TIER` (or `NULL_ENCOUNTER_TIER`); the gauntlet's
+"Encounter security: randomized" uses the Enc. difficulty tier.
+`Tests/encounter_security_test.tscn` checks the rates above over 400
+encounters per tier, eligibility and reproducibility.
+
 ## Fit
 
 `check_fit()` checks the footprint against a layout:

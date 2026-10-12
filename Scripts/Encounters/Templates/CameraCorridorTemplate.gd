@@ -32,8 +32,9 @@ func get_max_length() -> float:
 	return get_base_length() + (spacing_cells if wildcard_enabled else 0.0)
 
 func _build(run: RunDefinition, inst: EncounterInstance, rng: RandomNumberGenerator) -> void:
-	var slots := camera_count + (1 if wildcard_enabled else 0)
-	var wild_slot := rng.randi_range(0, camera_count) if wildcard_enabled else -1
+	var wild := wildcard_enabled and inst.wildcard_active
+	var slots := camera_count + (1 if wild else 0)
+	var wild_slot := rng.randi_range(0, camera_count) if wild else -1
 	var pan_index := 0
 	for slot in slots:
 		var cell := inst.anchor_cell + lead_cells + slot * spacing_cells
@@ -61,5 +62,5 @@ func _build(run: RunDefinition, inst: EncounterInstance, rng: RandomNumberGenera
 		pan_index += 1
 		inst.add("cam_pan_%d" % pan_index, builder)
 	inst.end_cell = inst.anchor_cell + lead_cells * 2.0 + (slots - 1) * spacing_cells
-	if wildcard_enabled:
+	if wild:
 		inst.wildcard = {"kind": "stationary_camera", "slot": wild_slot, "of": slots}
