@@ -269,6 +269,7 @@ func spawn_next() -> void:
 # hitting the finite fallback route or keeping old signals in memory.
 func _reset_corridor() -> void:
 	timeline.set_runner_cell(0)
+	timeline.clear_speed_mode()
 	timeline.BASE_CELLS_PER_SECOND = settings.runner_speed
 	timeline.cells_per_second = settings.runner_speed
 	if timeline._time_scale_tween != null and timeline._time_scale_tween.is_valid():

@@ -14,4 +14,6 @@ func get_spawns() -> Array[Dictionary]:
 		"door": return [spawn(BASIC_DOOR, 3.0).id("probe").lane(2).add_puzzle("sniff", 1).build()]
 		"guard": return [spawn(BASIC_GUARD, 3.0).id("probe").lane(2).build()]
 		"combat_drone": return [spawn(COMBAT_DRONE, 3.0).id("probe").lane(2).build()]
+		# Stationary guard out of reveal range of the runner at the start.
+		"far_guard": return [spawn(BASIC_GUARD, 6.5).id("probe").lane(0).build()]
 	return []

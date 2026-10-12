@@ -7,6 +7,9 @@ extends Node2D
 @export var BASE_CELLS_PER_SECOND: float = 0.15		# 0.2 ~= 30 seconds window from spawn to contact
 @export var slow_speed_modifier: float = 0.5
 @export var fast_speed_modifier: float = 3
+# Pressing slow (left) or hustle (right) holds that speed this long; pressing
+# the same key again refreshes it, the other key switches.
+@export var speed_toggle_sec: float = 15.0
 @export var null_spike_time_scale: float = 0.5
 @export var null_spike_transition_duration: float = 0.50
 @export var runner_screen_offset_cells: float = 1
@@ -49,6 +52,8 @@ var current_cell_pos: float = 0.0
 var last_emitted_cell: int = -1
 var current_cell: int
 var current_speed_mult: float = 1.0
+var speed_mode: StringName = &"walk"   # &"walk", &"slow", &"hustle"
+var speed_time_left: float = 0.0
 var null_spike_active: bool = false
 var tutorial_locked: bool = false
 var _time_scale_tween: Tween
@@ -261,17 +266,34 @@ func _handle_input():
 		toggle_null_spike()
 
 
-	# runner speed handling
-	current_speed_mult = 1.0
-	if Input.is_action_pressed("ui_left"): 
+	# Runner speed: a press starts (or refreshes) a timed slow/hustle.
+	if Input.is_action_just_pressed("ui_left"):
+		set_speed_mode(&"slow")
+	elif Input.is_action_just_pressed("ui_right"):
+		set_speed_mode(&"hustle")
+	if speed_mode != &"walk":
+		speed_time_left -= get_process_delta_time()
+		if speed_time_left <= 0.0:
+			clear_speed_mode()
+	current_speed_mult = slow_speed_modifier if speed_mode == &"slow" else (fast_speed_modifier if speed_mode == &"hustle" else 1.0)
+
+# Starts or refreshes a timed speed change (&"slow" or &"hustle"). Also the
+# entry point for other input sources (e.g. voice commands).
+func set_speed_mode(mode: StringName, duration: float = -1.0) -> void:
+	if mode != &"slow" and mode != &"hustle":
+		clear_speed_mode()
+		return
+	speed_mode = mode
+	speed_time_left = speed_toggle_sec if duration < 0.0 else duration
+	if mode == &"slow":
 		GlobalEvents.runner_slowdown.emit()
-		current_speed_mult = slow_speed_modifier
-	elif Input.is_action_pressed("ui_right"):
+	else:
 		GlobalEvents.runner_hustle.emit()
-		current_speed_mult = fast_speed_modifier
-		
-	# Optional: Emit signal if you want UI to show "FAST FORWARD" text
-	# emit_signal("speed_changed", current_speed_mult)
+
+func clear_speed_mode() -> void:
+	speed_mode = &"walk"
+	speed_time_left = 0.0
+	current_speed_mult = 1.0
 
 func toggle_null_spike():
 	if not GlobalEvents.is_tutorial_feature_enabled("null_spike"):

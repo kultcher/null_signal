@@ -260,9 +260,15 @@ func apply_disruption_visuals(offset: Vector2, glitch: bool, fake: bool, blackou
 		_disruption_fake = fake
 		queue_redraw()
 	visible = not blackout
-	signal_icon.input_pickable = not blackout
-	tooltip_main.visible = not fake and not blackout
+	# Unrevealed guards stay hidden and unclickable (see set_guard_revealed);
+	# this runs every frame, so it must not override that.
+	var hidden_guard := _is_hidden_guard()
+	signal_icon.input_pickable = not blackout and not hidden_guard
+	tooltip_main.visible = not fake and not blackout and not hidden_guard
 	_refresh_disrupted_tooltip()
+
+func _is_hidden_guard() -> bool:
+	return my_data != null and my_data.type == SignalData.Type.GUARD and not _guard_revealed
 
 func _draw() -> void:
 	if not _disruption_glitch:
@@ -281,6 +287,8 @@ func hide_tooltip():
 	tooltip_main.hide()
 
 func show_hover_tooltip():
+	if _is_hidden_guard():
+		return
 	tooltip_main.show()
 	refresh_status_panels()
 	_sync_tooltip_body_visibility()
