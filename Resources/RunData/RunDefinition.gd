@@ -536,6 +536,7 @@ func _create_ic_module(name: String) -> ICModule:
 		"blackout": func() -> ICModule: return BlackoutModule.new(),
 		"glitch": func() -> ICModule: return GlitchModule.new(),
 		"redact": func() -> ICModule: return RedactModule.new(),
+		"necromancer": func() -> ICModule: return NecromancerModule.new(),
 	}
 	var factory = factory_map.get(name, null)
 	if factory == null:

@@ -118,6 +118,20 @@ func run_checks() -> void:
 	lab.skip_trial()
 	check("skip ends every active encounter", lab.encounters.is_empty() and lab.recorder.encounter_records[-1].outcome == "skipped")
 
+	# --- randomized encounter security ---
+	_set_fields({"pool_enc": ["watched_door"], "cadence_sec": 0.0, "encounter_difficulty": 4})
+	lab.fields.get_node("EncounterRow/Security").select(1)
+	lab.apply_settings()
+	await _next_trial()
+	check("randomized security is applied at the difficulty tier", lab.encounters.size() == 1 and lab.recorder.groups[lab.encounters[0].group].info.security_tier == 4)
+	if lab.encounters.size() == 1:
+		var rolled_door: ActiveSignal = lab.encounters[0].sigs.filter(func(s): return s.data.type == SignalData.Type.DOOR)[0]
+		var door_config: Dictionary = lab.recorder.active[rolled_door.get_instance_id()].config
+		check("tier 4 door carries rolled IC and a tier 4-5 puzzle", door_config.ic.size() >= 1 and door_config.difficulty in [4, 5])
+	lab.fields.get_node("EncounterRow/Security").select(0)
+	lab.apply_settings()
+	lab.skip_trial()
+
 	# --- files ---
 	var path: String = lab.recorder.output_path
 	var encounter_csv: String = OUTPUT.path_join(lab.recorder.session + "_encounters.csv")

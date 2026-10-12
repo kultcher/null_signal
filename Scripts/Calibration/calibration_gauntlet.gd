@@ -140,6 +140,7 @@ func _load_fields() -> void:
 	fields.get_node("EncounterRow/Host").select(1 if settings.host == "camera" else 0)
 	fields.get_node("Leads").text = GauntletSettings.format_leads(settings.lead_cells)
 	fields.get_node("EncounterDisruptions").button_pressed = settings.encounter_disruptions
+	fields.get_node("EncounterRow/Security").select(1 if settings.encounter_security == "randomized" else 0)
 	for key in GauntletSettings.CAMERA_IC:
 		fields.get_node("Pools/IC/" + key).button_pressed = key in settings.ic_pool
 	for key in GauntletSettings.ENCOUNTERS:
@@ -163,6 +164,7 @@ func apply_settings() -> void:
 	settings.host = "camera" if fields.get_node("EncounterRow/Host").selected == 1 else "door"
 	settings.lead_cells = GauntletSettings.parse_leads(fields.get_node("Leads").text)
 	settings.encounter_disruptions = fields.get_node("EncounterDisruptions").button_pressed
+	settings.encounter_security = "randomized" if fields.get_node("EncounterRow/Security").selected == 1 else "authored"
 	settings.tester = fields.get_node("Tester").text.strip_edges()
 	settings.skill_tag = fields.get_node("Skill").text.strip_edges()
 	settings.isolated_elements = fields.get_node("Mode").selected == 0
@@ -315,7 +317,8 @@ func _spawn_encounter() -> void:
 		anchor = maxf(anchor, float(enc.end_cell) + 1.5)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(case.seed)
-	var inst := template.generate(run, anchor, rng, "enc%03d_%s" % [_sequence, String(template_id).get_slice("_", 0)])
+	var security_tier: int = settings.encounter_difficulty if settings.encounter_security == "randomized" else 0
+	var inst := template.generate(run, anchor, rng, "enc%03d_%s" % [_sequence, String(template_id).get_slice("_", 0)], security_tier)
 	var preferred_role: String = {"watched_door": "door", "camera_corridor": "cam_fixed", "drone_patrol": "drone_1", "guard_patrol": "cam_reveal"}.get(String(template_id), "")
 	var added_ic: Array = []
 	var ic_host_role := ""
@@ -350,7 +353,9 @@ func _spawn_encounter() -> void:
 		"lead_cells": float(case.lead), "window_sec": (first_cell - runner) / settings.runner_speed,
 		"predicted_total": predicted, "warmup": _sequence <= settings.warmup_trials, "session_index": _sequence,
 		"repeat": repeat, "concurrent": encounters.size(), "exposure": recorder.take_exposure(keys),
-		"added_ic": added_ic, "ic_host_role": ic_host_role, "ic_case": case.get("ic", []).duplicate(true)}
+		"added_ic": added_ic, "ic_host_role": ic_host_role, "ic_case": case.get("ic", []).duplicate(true),
+		"security": settings.encounter_security, "security_tier": inst.security_tier, "security_rolls": inst.security.duplicate(true),
+		"wildcard_active": inst.wildcard_active}
 	var group := recorder.begin_group(info)
 	var sigs: Array[ActiveSignal] = []
 	for item in built:
@@ -502,7 +507,7 @@ func _build_extra_fields() -> void:
 	var mode: OptionButton = fields.get_node("Mode")
 	var row := HBoxContainer.new()
 	row.name = "EncounterRow"
-	for spec in [["Source", ["Trials: elements (one signal)", "Trials: encounter templates"]], ["Host", ["Element host: door", "Element host: camera (+ Reboot, Heartbeat, Tripwire)"]]]:
+	for spec in [["Source", ["Trials: elements (one signal)", "Trials: encounter templates"]], ["Host", ["Element host: door", "Element host: camera (+ Reboot, Heartbeat, Tripwire)"]], ["Security", ["Encounter security: authored", "Encounter security: randomized (Enc. difficulty tier)"]]]:
 		var option := mode.duplicate(0) as OptionButton
 		option.name = spec[0]
 		option.clear()
@@ -546,7 +551,7 @@ func _build_extra_fields() -> void:
 		box.name = key
 		box.text = key.capitalize()
 		pool.add_child(box)
-	fields.get_node("Note").text = "Single elements uses IC count as off/on; combinations use the exact count. *Camera host only.\nEncounters keep their template puzzles/IC. Optional added disruption uses the six new IC on one host.\nBaseline means no added disruption; cadence > 0 overlaps encounters. Rate the last trial: F4/F5/F6."
+	fields.get_node("Note").text = "Single elements uses IC count as off/on; combinations use the exact count. *Camera host only.\nEncounter security: authored, or randomized from the Enc. difficulty tier (1-5). Added disruption layers on top.\nBaseline means no added disruption; cadence > 0 overlaps encounters. Rate the last trial: F4/F5/F6."
 
 func _refresh_ic_controls() -> void:
 	var encounters_mode: bool = fields.get_node("EncounterRow/Source").selected == 1
@@ -555,6 +560,7 @@ func _refresh_ic_controls() -> void:
 	fields.get_node("Numbers/ic_count").max_value = available.size()
 	fields.get_node("EncounterRow/Host").disabled = encounters_mode
 	fields.get_node("EncounterDisruptions").disabled = not encounters_mode
+	fields.get_node("EncounterRow/Security").disabled = not encounters_mode
 	fields.get_node("Baseline").text = "Include original template (no added disruption)" if encounters_mode else "Include unprotected baseline"
 	fields.get_node("Mode").set_item_text(0, "Single additions: original template or one IC" if encounters_mode else "Single elements: baseline, one IC, or one puzzle")
 	fields.get_node("Mode").set_item_text(1, "Combined additions: selected IC count" if encounters_mode else "Combinations: selected IC count + optional puzzle")

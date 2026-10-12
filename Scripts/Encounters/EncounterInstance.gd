@@ -19,6 +19,13 @@ var wildcard: Dictionary = {}         # empty when the template has none
 # Points where the runner waits: {"cell", "lane", "kind"}. "blocker" = the
 # obstacle stops him (locked door, hazard). Reserved kinds: "cover".
 var stop_points: Array[Dictionary] = []
+# Whether this placement includes the template's wildcard (rolled per tier;
+# always true for authored placements).
+var wildcard_active := true
+# Randomized security (EncounterSecurity): 0 = authored. security maps
+# system_id -> {"kind", "package", "puzzle", "ic"}.
+var security_tier := 0
+var security: Dictionary = {}
 
 func get_length() -> float:
 	return end_cell - start_cell
@@ -45,4 +52,6 @@ func describe() -> String:
 			if key != "kind":
 				parts.append("%s %s" % [key, str(wildcard[key])])
 		text += " // wildcard %s (%s)" % [wildcard.get("kind", "?"), ", ".join(parts)]
+	if security_tier > 0:
+		text += " // security T%d: %s" % [security_tier, EncounterSecurity.describe(self)]
 	return text

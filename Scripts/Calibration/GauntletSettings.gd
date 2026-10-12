@@ -50,6 +50,10 @@ const MAX_LEAD_CELLS := 7.0
 # Compare an authored encounter to the same template with added disruption on
 # one designated host. Existing template puzzles and IC are retained.
 @export var encounter_disruptions := false
+# Encounter security: "authored" keeps each template's own setup;
+# "randomized" rolls IC, puzzles and the wildcard from EncounterSecurity at the
+# Enc. difficulty tier (1-5). Added disruptive IC still layer on top.
+@export_enum("authored", "randomized") var encounter_security := "authored"
 
 func available_ic() -> Array:
 	return DOOR_IC + CAMERA_IC if host == "camera" else DOOR_IC.duplicate()
@@ -89,6 +93,7 @@ func normalized_copy() -> GauntletSettings:
 	if copy.encounter_pool.is_empty():
 		copy.encounter_pool = PackedStringArray(ENCOUNTERS)
 	copy.encounter_difficulty = clampi(encounter_difficulty, 1, 5)
+	copy.encounter_security = encounter_security if encounter_security in ["authored", "randomized"] else "authored"
 	copy.cadence_sec = maxf(0.0, cadence_sec)
 	copy.max_concurrent = clampi(max_concurrent, 1, 4)
 	copy.lead_cells = PackedFloat32Array()

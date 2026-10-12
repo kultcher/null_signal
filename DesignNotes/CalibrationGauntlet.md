@@ -221,3 +221,13 @@ and input delivery along with the recorder clocks.
 godot --headless --fixed-fps 60 res://Tests/gauntlet_disruption_test.tscn
 python -m unittest discover -s Tools/Calibration -p 'test_*.py'
 ```
+
+## Randomized encounter security
+
+**Encounter security: randomized** (encounter trials) rolls each encounter's
+IC, puzzles and wildcard from `EncounterSecurity` at the Enc. difficulty tier
+(1-5) instead of the template's authored setup. Added disruptive IC still
+layer on top. Encounter metadata records `security`, `security_tier`,
+`security_rolls` (per signal) and `wildcard_active`; member trials record
+their resolved IC/puzzle as usual. See `EncounterTemplates.md` for the tier
+table.
