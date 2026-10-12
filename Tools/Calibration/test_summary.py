@@ -136,6 +136,44 @@ class SummaryTests(unittest.TestCase):
         two = {"puzzle": "none", "ic": [], "predicted": {"total": 9}, "exposure": {"a": 7}, "warmup": False, "session_index": 9}
         self.assertEqual(tuning_signature(one), tuning_signature(two))
 
+    def test_disruption_counts_are_aggregated_without_double_counting_events(self):
+        config = {"puzzle": "none", "difficulty": 0,
+                  "ic": [{"ic": "lag", "difficulty": 2, "resolved": {"delay_sec": .3}}]}
+        events = []
+        for trial in [1, 2]:
+            rows = self.connection_trial(trial, config)
+            friction = [{**rows[0], "event": "ic_disruption", "ic": "lag", "phase": "queued"}] * 2
+            if trial == 1:
+                rows[-1]["disruption_counts"] = {"lag.queued": 8}
+            events += rows[:-1] + friction + rows[-1:]
+        report = self.report(events)
+        self.assertEqual(report["groups"][0]["disruption_counts"], {"lag.queued": 10})
+        # Friction counters do not invent a cognitive blocking/background cost.
+        self.assertNotIn("ic.lag.2", {row["key"] for row in report["components"]})
+
+    def test_encounters_keep_added_ic_profiles_and_host_roles_separate(self):
+        events = []
+        for index, (delay, role) in enumerate([(None, ""), (.3, "door"), (.5, "door"), (.3, "cam_watch")]):
+            added = [] if delay is None else [{"ic": "lag", "difficulty": 2, "resolved": {"delay_sec": delay}}]
+            events.append({"event": "encounter_ended", "session": "s", "encounter": str(index),
+                           "tester": "alice", "skill": "novice", "template": "watched_door",
+                           "difficulty": 1, "wildcard": {}, "lead_cells": 3, "outcome": "clean",
+                           "visible_to_pass_sec": 20, "added_ic": added, "ic_host_role": role,
+                           "disruption_counts": {"lag.queued": 4} if added else {}})
+        report = self.report(events)
+        self.assertEqual(len(report["encounters"]), 4)
+        rows = report["encounters"]
+        self.assertEqual(len({row["ic_signature"] for row in rows}), 3)
+        self.assertEqual(sum(row["disruption_counts"].get("lag.queued", 0) for row in rows), 12)
+        self.assertEqual(next(row for row in rows if not row["added_ic"])["ic_host_role"], "")
+        self.assertEqual(report["components"], [])
+
+    def test_warmup_does_not_contaminate_disruption_counts(self):
+        config = {"puzzle": "none", "difficulty": 0, "ic": [{"ic": "glitch", "difficulty": 1}], "warmup": True}
+        rows = self.connection_trial(1, config)
+        rows[-1]["disruption_counts"] = {"glitch.fake_clicked": 12}
+        self.assertEqual(self.report(rows)["groups"], [])
+
     def test_warmup_is_skipped_unless_requested(self):
         events = self.element(1, "success", warmup=True) + self.element(2, "success")
         report = self.report(events)
@@ -154,6 +192,33 @@ class SummaryTests(unittest.TestCase):
         rates = {row["lead_cells"]: row["success_rate"] for row in report["window_curve"]}
         self.assertEqual(rates, {3.0: 0.5, 6.0: 1.0})
         self.assertEqual(report["prediction"][0]["residual"]["median"], 2)
+
+    def test_host_and_window_baselines_are_not_mixed(self):
+        events = []
+        # Same case/tier, but passing a camera is a different endpoint from OP
+        # on a door; comparing different approach windows is also misleading.
+        for index, (host, lead, ic, duration) in enumerate([
+            ("door", 3, False, 2), ("camera", 3, False, 12),
+            ("door", 6, False, 22), ("door", 3, True, 5),
+        ]):
+            config = {"puzzle": "none", "difficulty": 0, "runner_speed": .15,
+                      "breach_delay_sec": 3, "host": host, "lead_cells": lead,
+                      "predicted": {"total": 3},
+                      "ic": [{"ic": "lag", "difficulty": 1}] if ic else []}
+            rows = self.connection_trial(index + 1, config)
+            if host == "camera":
+                # Existing ordinary-play logs lack config.host, but expose
+                # the actual signal type on each event.
+                config.pop("host")
+                rows[-1]["sig_type"] = "CAMERA"
+            rows[-1].update({"case_key": "ic.lag.1" if ic else "baseline",
+                             "interaction_to_clear_sec": duration})
+            events += rows
+        report = self.report(events)
+        self.assertEqual(report["ic_overhead"][0]["median"], 3)
+        baseline_prediction = [row for row in report["prediction"] if row["case_key"] == "baseline"]
+        self.assertEqual({row["host"] for row in baseline_prediction}, {"door", "camera"})
+        self.assertEqual(len([row for row in report["window_curve"] if row["case_key"] == "baseline"]), 3)
 
     def test_encounters_are_grouped_rated_and_kept_out_of_costs(self):
         events = []

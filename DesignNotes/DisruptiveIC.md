@@ -22,9 +22,10 @@ tuning. The in-game panel exposes their tuning fields; edits apply when a
 fresh host is created. The lab reveals scan details for convenience and
 disables escalation and automatic Codex popups.
 
-The encounter gauntlet is intentionally unchanged while its template
-integration is in progress. These IC can be added through ordinary builders
-without coupling that work to the old single-door selection UI:
+The calibration gauntlet now includes these IC on door and camera element
+hosts, plus optional additions to encounter templates. See
+[CalibrationGauntlet.md](CalibrationGauntlet.md) for selection and telemetry.
+They can also be added through ordinary builders:
 
 ```gdscript
 spawn(BASIC_DOOR, 4.0).id("disruptive_door") \
@@ -66,9 +67,11 @@ The controller exposes `effect_event(sig, effect, event, details)` for telemetry
 `started`, `ended`, Lag `queued`/`submitted`, Spammer `spawned`/`dismissed`, and
 Glitch `fake_clicked`. The host signal is explicit for attribution with several
 sessions open. The recorder's existing resource serialization can capture all
-exported tuning values. Hooking these friction events and exposing the new
-types in the encounter gauntlet is deferred to that integration; no numeric
-attention-cost guesses have been inserted into the cost table.
+exported tuning values. `PlaytestRecorder` now listens to these events and
+records `ic_disruption` plus per-trial and per-encounter `disruption_counts`.
+The gauntlet's F4–F10 controls bypass Lag; terminal typing, edits and Enter
+still pass through the buffer. No numeric attention-cost guesses have been
+inserted into the cost table.
 
 ## Validation
 
