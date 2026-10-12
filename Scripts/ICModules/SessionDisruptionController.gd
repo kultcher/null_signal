@@ -129,6 +129,10 @@ func _input(event: InputEvent) -> void:
 	var state := _state(terminal.active_signal)
 	if not state.modules.has(&"lag"):
 		return
+	# Swallowing the key would hide it from the global Null Spike tap (Ctrl);
+	# let the timeline see it first. Ctrl chords still reach the delayed editor.
+	if CommandDispatch.timeline_manager != null:
+		CommandDispatch.timeline_manager.observe_null_spike_key(event)
 	queue_input(terminal.active_signal, event)
 	get_viewport().set_input_as_handled()
 
