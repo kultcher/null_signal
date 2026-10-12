@@ -241,7 +241,7 @@ func _run_drone_01_intro_sequence():
 
 	await _wait_for_cell(16.5)
 	await _set_objective("- Help Blackjack through the gauntlet
-- Press <- or -> to have Blackjack slow down or speed up for 15 seconds
+- Press <- or -> to have Blackjack slow down or speed up for 15 seconds (the other arrow cancels)
 - Press F1 if you need a refresher on terminal commands")
 	await _show_dialogue([
 		"Long corridor coming up, lots of cameras and a few drones. No more hand-holding, kid. Let's see what you've got.",

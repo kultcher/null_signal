@@ -71,7 +71,19 @@ func _ready() -> void:
 	await _press("ui_left")
 	check("left starts a timed slow", timeline.speed_mode == &"slow" and is_equal_approx(timeline.current_speed_mult, timeline.slow_speed_modifier))
 	await _press("ui_right")
-	check("the other key switches modes", timeline.speed_mode == &"hustle")
+	check("right from a slowdown returns to walking", timeline.speed_mode == &"walk")
+	await _press("ui_right")
+	await _press("ui_left")
+	check("left from a hustle returns to walking", timeline.speed_mode == &"walk")
+	# Arrows edit text while the command line has something typed in it.
+	var line: LineEdit = CommandDispatch.terminal_window.command_line
+	line.grab_focus()
+	line.text = "ACCESS cam"
+	await _press("ui_right")
+	check("arrows move the caret, not the runner, while typing", timeline.speed_mode == &"walk")
+	line.text = ""
+	await _press("ui_right")
+	check("arrows control speed when the command line is empty", timeline.speed_mode == &"hustle")
 	timeline.clear_speed_mode()
 	check("clear returns to walking", timeline.speed_mode == &"walk")
 

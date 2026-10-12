@@ -8,7 +8,7 @@ extends Node2D
 @export var slow_speed_modifier: float = 0.5
 @export var fast_speed_modifier: float = 3
 # Pressing slow (left) or hustle (right) holds that speed this long; pressing
-# the same key again refreshes it, the other key switches.
+# the same key again refreshes it, the other key returns to walking.
 @export var speed_toggle_sec: float = 15.0
 @export var null_spike_time_scale: float = 0.5
 @export var null_spike_transition_duration: float = 0.50
@@ -266,16 +266,33 @@ func _handle_input():
 		toggle_null_spike()
 
 
-	# Runner speed: a press starts (or refreshes) a timed slow/hustle.
-	if Input.is_action_just_pressed("ui_left"):
-		set_speed_mode(&"slow")
-	elif Input.is_action_just_pressed("ui_right"):
-		set_speed_mode(&"hustle")
+	# Runner speed: a press starts (or refreshes) a timed slow/hustle; the
+	# opposite key cancels back to walking. Arrows edit text instead while the
+	# focused text field has something in it.
+	if not _arrows_edit_text():
+		if Input.is_action_just_pressed("ui_left"):
+			if speed_mode == &"hustle":
+				clear_speed_mode()
+			else:
+				set_speed_mode(&"slow")
+		elif Input.is_action_just_pressed("ui_right"):
+			if speed_mode == &"slow":
+				clear_speed_mode()
+			else:
+				set_speed_mode(&"hustle")
 	if speed_mode != &"walk":
 		speed_time_left -= get_process_delta_time()
 		if speed_time_left <= 0.0:
 			clear_speed_mode()
 	current_speed_mult = slow_speed_modifier if speed_mode == &"slow" else (fast_speed_modifier if speed_mode == &"hustle" else 1.0)
+
+func _arrows_edit_text() -> bool:
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused is LineEdit:
+		return not (focused as LineEdit).text.is_empty()
+	if focused is TextEdit:
+		return not (focused as TextEdit).text.is_empty()
+	return false
 
 # Starts or refreshes a timed speed change (&"slow" or &"hustle"). Also the
 # entry point for other input sources (e.g. voice commands).
