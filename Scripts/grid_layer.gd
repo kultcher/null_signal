@@ -37,6 +37,10 @@ const RUNNER_EDGE_FADE_PX := 40.0
 func _ready():
 	if runner_team:
 		_update_runner_team_position()
+		var speed_bar := RunnerSpeedBar.new()
+		speed_bar.name = "SpeedBar"
+		runner_team.add_child(speed_bar)
+		speed_bar.setup(timeline_manager)
 	_apply_map_layout()
 	timeline_manager.layout_changed.connect(func(_size: Vector2) -> void: _apply_map_layout())
 
