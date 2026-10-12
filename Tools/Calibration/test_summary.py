@@ -120,6 +120,62 @@ class SummaryTests(unittest.TestCase):
         candidate = candidate_table(table, report, 1)
         self.assertEqual(candidate["base"]["command"], table["base"]["command"])
 
+    def element(self, trial, outcome, lead=-1.0, warmup=False, predicted=3.0, case="baseline"):
+        config = {"puzzle": "none", "difficulty": 0, "ic": [], "runner_speed": .15, "lead_cells": lead,
+                  "window_sec": 20.0 if lead < 0 else lead / .15, "warmup": warmup, "session_index": trial,
+                  "predicted": {"total": predicted}, "exposure": {"puzzle.sniff": trial}}
+        common = {"session": "s", "trial": trial, "tester": "alice", "skill": "novice"}
+        return [{**common, "event": "signal_visible", "t": 0, "wall_t": 0},
+                {**common, "event": "scan_started", "t": 1, "wall_t": 1},
+                {**common, "event": "trial_ended", "t": 6, "wall_t": 6, "config": config, "outcome": outcome,
+                 "case_key": case, "visible_to_clear_sec": 6 if outcome == "success" else None,
+                 "interaction_to_clear_sec": 5 if outcome == "success" else None, "spawn_to_end_sec": 6}]
+
+    def test_bookkeeping_does_not_split_signatures(self):
+        one = {"puzzle": "none", "ic": [], "predicted": {"total": 3}, "exposure": {"a": 1}, "warmup": True, "session_index": 1}
+        two = {"puzzle": "none", "ic": [], "predicted": {"total": 9}, "exposure": {"a": 7}, "warmup": False, "session_index": 9}
+        self.assertEqual(tuning_signature(one), tuning_signature(two))
+
+    def test_warmup_is_skipped_unless_requested(self):
+        events = self.element(1, "success", warmup=True) + self.element(2, "success")
+        report = self.report(events)
+        self.assertEqual(report["warmup_trials_skipped"], 1)
+        self.assertEqual(report["groups"][0]["trials"], 1)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "session.jsonl"
+            path.write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
+            self.assertEqual(summarize([path], include_warmup=True)["groups"][0]["trials"], 2)
+
+    def test_window_curve_and_prediction(self):
+        events = []
+        for index, (lead, outcome) in enumerate([(3.0, "breached"), (3.0, "success"), (6.0, "success"), (6.0, "success")]):
+            events += self.element(index + 1, outcome, lead)
+        report = self.report(events)
+        rates = {row["lead_cells"]: row["success_rate"] for row in report["window_curve"]}
+        self.assertEqual(rates, {3.0: 0.5, 6.0: 1.0})
+        self.assertEqual(report["prediction"][0]["residual"]["median"], 2)
+
+    def test_encounters_are_grouped_rated_and_kept_out_of_costs(self):
+        events = []
+        member = {"puzzle": "none", "difficulty": 0, "ic": [], "template": "watched_door", "role": "cam_watch", "encounter": "enc_0001"}
+        common = {"session": "s", "trial": 1, "tester": "alice", "skill": "novice"}
+        events += [{**common, "event": "signal_visible", "t": 0, "wall_t": 0},
+                   {**common, "event": "scan_started", "t": 1, "wall_t": 1},
+                   {**common, "event": "trial_ended", "t": 4, "wall_t": 4, "config": member, "outcome": "success",
+                    "case_key": "enc.watched_door.cam_watch", "visible_to_clear_sec": 4, "interaction_to_clear_sec": 3, "spawn_to_end_sec": 4}]
+        for index, (outcome, heat) in enumerate([("clean", 0), ("heated", 120), ("warm", 0)]):
+            events.append({"event": "encounter_ended", "session": "s", "tester": "alice", "skill": "novice", "encounter": f"enc_{index:04d}",
+                           "template": "watched_door", "wildcard": {}, "difficulty": 1, "lead_cells": -1, "outcome": outcome if outcome != "warm" else "clean",
+                           "visible_to_pass_sec": 20 + index, "heat": heat, "damage": 0, "predicted_total": 8, "warmup": outcome == "warm", "info": {}})
+        events.append({"event": "rating", "session": "s", "encounter": "enc_0001", "rating": 3})
+        report = self.report(events)
+        self.assertEqual(report["components"], [])
+        row = report["encounters"][0]
+        self.assertEqual(row["encounters"], 2)
+        self.assertEqual(row["clean_rate"], 0.5)
+        self.assertEqual(row["rating"], 3)
+        self.assertEqual(row["visible_to_pass"]["median"], 20.5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -115,3 +115,52 @@ python -m unittest discover -s Tools/Calibration -p 'test_*.py'
 The integration scene exercises sampling, OP, parser errors, cleanup, repeat,
 real breach and pause, buffered Callback retry/acceptance, Fuzz, the JSONL
 contract, and the tutorial's runner-detection reaction.
+
+## Encounters, windows and session hygiene
+
+Added after the first sessions. All settings live in the same panel (the extra
+fields are built in code, so the scene is unchanged).
+
+- **Trials: encounter templates.** Each trial spawns a whole encounter from
+  `EncounterLibrary` (watched door, camera corridor, drone patrol, guard patrol;
+  pick the pool with the checkboxes). Every member signal is still its own
+  trial (case key `enc.<template>.<role>...`), grouped under an encounter id.
+  The encounter ends when the runner leaves its footprint; members still
+  active finish as `passed` (`how`: `seen` or `evaded`). Encounter outcome,
+  worst first: `damaged` > `breached` > `heated` > `clean`. Results go to the
+  JSONL (`encounter_started` / `encounter_ended`) and `<session>_encounters.csv`.
+  Encounter members never feed component costs.
+- **Cadence.** With Cadence > 0 the next encounter spawns that many seconds
+  after the previous one (real, pause-excluded time), up to 2 at once, placed
+  after the earlier footprint. 0 = one at a time.
+- **Window sweep.** Spawn distances in cells ahead of the runner (e.g.
+  `3, 5, 7`); every case runs at every distance. Trials record `lead_cells` and
+  `window_sec`; the summary's `window_curve` gives success rate per distance.
+  Blank = screen edge, as before.
+- **Camera host.** Element trials on a stationary camera on the route instead
+  of a door. Accepts the door IC plus Reboot, Heartbeat and Tripwire (marked
+  *). Success = the runner passes it without being seen; otherwise
+  `detected`.
+- **Prediction.** Each trial stores the CostTable estimate made at spawn
+  (`predicted`); the summary's `prediction` rows compare it to observed
+  interaction-to-clear time.
+- **Exposure counts.** Per tester, per element (`puzzle.sniff`, `ic.bouncer`,
+  `enc.camera_corridor`), across sessions, in `telemetry/testers/<tester>.json`.
+  Each trial records its counts before it started (`exposure`).
+- **Tester memory.** The last tester/skill pre-fill the next session.
+- **Warm-up.** The first N trials/encounters (default 3) are flagged
+  `warmup`; the summary skips them unless `--include-warmup`. `session_index`
+  records order for fatigue checks.
+- **Felt difficulty.** F4 / F5 / F6 rate the last finished trial or encounter
+  easy / fine / hard (`rating` event); the summary averages ratings per group.
+- **Heat attribution.** Detection heat ("Detected by <name>.") is credited to
+  that signal's trial even with several active; damage goes to the signal that
+  most recently detected the runner.
+
+Summary outputs added: `window_curve.csv`, `prediction.csv`, `encounters.csv`.
+
+Verification:
+
+```sh
+godot --headless --fixed-fps 60 res://Tests/gauntlet_encounter_test.tscn
+```

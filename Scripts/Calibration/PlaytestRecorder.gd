@@ -1,6 +1,7 @@
 class_name PlaytestRecorder extends Node
 
 signal trial_finished(summary: Dictionary)
+signal encounter_finished(summary: Dictionary)
 signal storage_failed(message: String)
 
 @export var output_directory := "user://telemetry"
@@ -24,6 +25,17 @@ var _pending: Dictionary = {}
 var _finished := false
 var _was_paused := false
 var _speed_mode := ""
+# Encounter groups: several watched signals recorded as one unit.
+var groups: Dictionary = {} # group id -> runtime group; not serialized.
+var encounter_records: Array[Dictionary] = []
+var _group_number := 0
+var _encounter_csv: FileAccess
+var _last_detector: ActiveSignal
+var _last_finished := {} # {"kind": "trial"/"encounter", "id": ...} for ratings
+
+const ENCOUNTER_CSV_FIELDS := ["session", "tester", "skill", "encounter", "template", "outcome", "wildcard", "difficulty", "lead_cells", "window_sec", "visible_to_pass_sec", "spawn_to_end_sec", "heat", "damage", "hold_sec", "predicted_total", "signals", "warmup", "session_index", "exposure"]
+const TESTERS_DIR := "testers"
+const LAST_TESTER_FILE := "last_tester.json"
 
 const CSV_FIELDS := ["session", "tester", "skill", "trial", "signal", "outcome", "case_key", "repeat_of", "visible_to_clear_sec", "interaction_to_clear_sec", "visible_to_end_sec", "interaction_to_end_sec", "spawn_to_end_sec", "game_duration_sec", "hold_sec", "command_count", "failed_commands", "puzzle_attempts", "puzzle_errors", "ic_events", "heat", "null_spike_used", "programs_used", "config_json"]
 
@@ -44,12 +56,9 @@ func _ready() -> void:
 	GlobalEvents.puzzle_failed.connect(func(data: SignalData): _data_event(data, "puzzle_failed"))
 	GlobalEvents.signal_breached.connect(func(sig: ActiveSignal): finish_trial(sig, "breached", "breached"))
 	GlobalEvents.heat_increased.connect(_heat)
-	GlobalEvents.runners_damaged.connect(func(amount: float):
-		if active.size() == 1:
-			observe(active.values()[0].sig, "runner_damage", {"damage": amount})
-	)
+	GlobalEvents.runners_damaged.connect(_damaged)
 	GlobalEvents.runner_hold_count_changed.connect(_holds)
-	GlobalEvents.runner_detected.connect(func(sig: ActiveSignal): observe(sig, "detected", {"by": sig.data.system_id, "heat_delta": 0.0}))
+	GlobalEvents.runner_detected.connect(_detected)
 	GlobalEvents.activate_null_spike.connect(func(): _mark_null_spike())
 	GlobalEvents.program_executed.connect(_program_executed)
 	if CommandDispatch.terminal_window != null:
@@ -86,6 +95,9 @@ func start_session(tester_name: String, skill: String, settings: Dictionary = {}
 		session = ""
 		return false
 	_csv.store_csv_line(PackedStringArray(CSV_FIELDS))
+	_encounter_csv = null
+	encounter_records.clear()
+	save_last_tester(tester, skill_tag)
 	write_event("run_started", null, {"tester": tester, "skill": skill_tag, "settings": settings, "heat": _current_heat(), "schema_version": 1, "clock_notes": "t = pause-excluded game time; wall_t = pause-excluded real time"})
 	return true
 
@@ -128,9 +140,11 @@ func advance_clock(game_delta: float, wall_delta: float) -> void:
 	game_clock += game_delta
 	wall_clock += wall_delta
 
-func watch_signal(sig: ActiveSignal, config: Dictionary, repeat_of: int = 0) -> int:
+func watch_signal(sig: ActiveSignal, config: Dictionary, repeat_of: int = 0, group_id: String = "") -> int:
 	_trial_number += 1
-	active[sig.get_instance_id()] = {"sig": sig, "trial": _trial_number, "config": config, "repeat_of": repeat_of, "started": wall_clock, "game_started": game_clock, "visible": null, "interaction": null, "hold_start": null, "hold_sec": 0.0, "commands": 0, "failed_commands": 0, "puzzle_attempts": 0, "puzzle_errors": 0, "ic_events": 0, "heat": 0.0, "null_spike_used": false, "programs_used": [], "disconnect_reason": "player"}
+	if groups.has(group_id):
+		groups[group_id].trials.append(_trial_number)
+	active[sig.get_instance_id()] = {"sig": sig, "trial": _trial_number, "group": group_id, "detected": false, "damage": 0.0, "config": config, "repeat_of": repeat_of, "started": wall_clock, "game_started": game_clock, "visible": null, "interaction": null, "hold_start": null, "hold_sec": 0.0, "commands": 0, "failed_commands": 0, "puzzle_attempts": 0, "puzzle_errors": 0, "ic_events": 0, "heat": 0.0, "null_spike_used": false, "programs_used": [], "disconnect_reason": "player"}
 	observe(sig, "trial_started", {"config": config, "repeat_of": repeat_of})
 	return _trial_number
 
@@ -140,6 +154,8 @@ func observe(sig: ActiveSignal, event: String, details: Dictionary = {}) -> void
 		return
 	if event == "signal_visible" and trial.visible == null:
 		trial.visible = wall_clock
+		if groups.has(trial.group) and groups[trial.group].first_visible == null:
+			groups[trial.group].first_visible = wall_clock
 	if event in ["scan_started", "command_started", "connected"] and trial.interaction == null:
 		trial.interaction = wall_clock
 	if event == "command":
@@ -175,7 +191,8 @@ func finish_trial(sig: ActiveSignal, outcome: String, how: String = "") -> void:
 		"hold_sec": trial.hold_sec, "command_count": trial.commands,
 		"failed_commands": trial.failed_commands, "puzzle_attempts": trial.puzzle_attempts,
 		"puzzle_errors": trial.puzzle_errors, "ic_events": trial.ic_events,
-		"heat": trial.heat, "null_spike_used": trial.null_spike_used, "config": trial.config
+		"heat": trial.heat, "null_spike_used": trial.null_spike_used, "config": trial.config,
+		"group": trial.group, "detected": trial.detected, "damage": trial.damage
 	}
 	observe(sig, "signal_resolved", {"how": how, "outcome": outcome})
 	summary["programs_used"] = trial.programs_used
@@ -191,6 +208,12 @@ func finish_trial(sig: ActiveSignal, outcome: String, how: String = "") -> void:
 	active.erase(sig.get_instance_id())
 	if _pending.get("trial", {}) == trial:
 		_pending = {}
+	if trial.group.is_empty():
+		_last_finished = {"kind": "trial", "id": trial.trial}
+	else:
+		var group: Dictionary = groups.get(trial.group, {})
+		if not group.is_empty():
+			group.results.append({"signal": sig.data.system_id, "role": trial.config.get("role", ""), "outcome": outcome, "how": how, "heat": trial.heat, "detected": trial.detected})
 	trial_finished.emit(summary)
 
 func write_event(event: String, sig: ActiveSignal = null, details: Dictionary = {}) -> void:
@@ -214,10 +237,13 @@ func end_session(result: String = "quit") -> void:
 		return
 	for trial in active.values().duplicate():
 		finish_trial(trial.sig, "interrupted", "ignored")
-	write_event("run_ended", null, {"result": result, "heat": _current_heat(), "trials": records.size()})
+	for group_id in groups.keys().duplicate():
+		end_group(group_id, "interrupted")
+	write_event("run_ended", null, {"result": result, "heat": _current_heat(), "trials": records.size(), "encounters": encounter_records.size()})
 	_finished = true
 	_jsonl = null
 	_csv = null
+	_encounter_csv = null
 
 func _exit_tree() -> void:
 	end_session("quit")
@@ -318,16 +344,77 @@ func _action_resolved(action: ActionContext) -> void:
 		finish_trial(sig, "success", "disabled")
 
 func _heat(amount: float, source: String) -> void:
-	# In an isolated gauntlet, all heat belongs to the active trial. In normal
-	# play retain an unassigned event rather than guessing a host from text.
-	if active.size() == 1:
-		var trial: Dictionary = active.values()[0]
+	# Detection heat names its host ("Detected by <name>."): attribute it there.
+	# Otherwise, in an isolated gauntlet all heat belongs to the only active
+	# trial; with several active, keep it on their shared encounter if any,
+	# else as an unassigned run-level event.
+	var trial := _trial_for_source(source)
+	if trial.is_empty() and active.size() == 1:
+		trial = active.values()[0]
+	if not trial.is_empty():
 		trial.heat += amount
+		if groups.has(trial.group):
+			groups[trial.group].heat += amount
 		observe(trial.sig, "heat", {"heat_delta": amount, "source": source})
+		return
+	var group_id := _single_active_group()
+	if not group_id.is_empty():
+		groups[group_id].heat += amount
+		write_event("heat", null, {"heat_delta": amount, "source": source, "encounter": group_id})
 	else:
 		write_event("heat", null, {"heat_delta": amount, "source": source})
 
+func _trial_for_source(source: String) -> Dictionary:
+	if not source.begins_with("Detected by "):
+		return {}
+	var name := source.trim_prefix("Detected by ").trim_suffix(".")
+	for trial in active.values():
+		if trial.sig.data != null and (trial.sig.data.display_name == name or trial.sig.data.system_id == name):
+			return trial
+	return {}
+
+func _single_active_group() -> String:
+	var found := ""
+	for trial in active.values():
+		if trial.group.is_empty():
+			return ""
+		if found.is_empty():
+			found = trial.group
+		elif found != trial.group:
+			return ""
+	return found
+
+func _detected(sig: ActiveSignal) -> void:
+	_last_detector = sig
+	var trial := _trial(sig)
+	if not trial.is_empty():
+		trial.detected = true
+	observe(sig, "detected", {"by": sig.data.system_id, "heat_delta": 0.0})
+
+# Damage carries no source: credit the signal that most recently detected the
+# runner if it is still watched, else the only active trial.
+func _damaged(amount: float) -> void:
+	var trial := _trial(_last_detector) if _last_detector != null and is_instance_valid(_last_detector) else {}
+	if trial.is_empty() and active.size() == 1:
+		trial = active.values()[0]
+	if trial.is_empty():
+		var group_id := _single_active_group()
+		if not group_id.is_empty():
+			groups[group_id].damage += amount
+		write_event("runner_damage", null, {"damage": amount, "encounter": group_id})
+		return
+	trial.damage += amount
+	if groups.has(trial.group):
+		groups[trial.group].damage += amount
+	observe(trial.sig, "runner_damage", {"damage": amount})
+
 func _holds(count: int) -> void:
+	for group in groups.values():
+		if count > 0 and group.hold_start == null:
+			group.hold_start = wall_clock
+		elif count == 0 and group.hold_start != null:
+			group.hold_sec += wall_clock - float(group.hold_start)
+			group.hold_start = null
 	for trial in active.values():
 		if count > 0 and trial.hold_start == null:
 			trial.hold_start = wall_clock
@@ -404,9 +491,152 @@ static func configuration(data: SignalData) -> Dictionary:
 
 static func case_key(config: Dictionary) -> String:
 	var pieces := PackedStringArray()
+	if config.has("template"):
+		pieces.append("enc.%s.%s" % [config.template, config.get("role", "signal")])
 	if config.puzzle != "none":
 		pieces.append("puzzle.%s.%d" % [config.puzzle, config.difficulty])
 	for module in config.ic:
 		pieces.append("ic.%s.%d" % [module.ic, module.difficulty])
 	pieces.sort()
 	return "+".join(pieces) if not pieces.is_empty() else "baseline"
+
+# --- encounter groups ---
+
+# Starts a group of trials recorded as one encounter. `info` carries the
+# template, wildcard, lead/window, prediction and session bookkeeping.
+func begin_group(info: Dictionary) -> String:
+	_group_number += 1
+	var group_id := "enc_%04d" % _group_number
+	groups[group_id] = {"id": group_id, "info": info, "trials": [], "results": [], "started": wall_clock, "game_started": game_clock, "heat": 0.0, "damage": 0.0, "hold_sec": 0.0, "hold_start": null, "first_visible": null}
+	write_event("encounter_started", null, {"encounter": group_id, "info": info})
+	return group_id
+
+# Ends a group: members still active are finished as "passed" (how: "seen" if
+# they detected the runner, else "evaded"). Outcome, worst first: interrupted
+# hints, damaged, breached, heated, clean.
+func end_group(group_id: String, hint: String = "") -> Dictionary:
+	if not groups.has(group_id):
+		return {}
+	var group: Dictionary = groups[group_id]
+	for trial in active.values().duplicate():
+		if trial.group == group_id:
+			var how := "seen" if trial.detected or trial.heat > 0.0 else "evaded"
+			finish_trial(trial.sig, hint if not hint.is_empty() else "passed", how)
+	if group.hold_start != null:
+		group.hold_sec += wall_clock - float(group.hold_start)
+	var first_visible = group.first_visible
+	var outcome := hint
+	if outcome.is_empty():
+		var breached: bool = group.results.any(func(r): return r.outcome == "breached")
+		if group.damage > 0.0:
+			outcome = "damaged"
+		elif breached:
+			outcome = "breached"
+		elif group.heat > 0.0:
+			outcome = "heated"
+		else:
+			outcome = "clean"
+	var info: Dictionary = group.info
+	var summary := {
+		"session": session, "tester": tester, "skill": skill_tag,
+		"encounter": group_id, "template": info.get("template", ""), "outcome": outcome,
+		"wildcard": info.get("wildcard", {}), "difficulty": info.get("difficulty", 0),
+		"lead_cells": info.get("lead_cells", -1.0), "window_sec": info.get("window_sec", null),
+		"visible_to_pass_sec": (wall_clock - float(first_visible)) if first_visible != null else null,
+		"spawn_to_end_sec": wall_clock - group.started,
+		"heat": group.heat, "damage": group.damage, "hold_sec": group.hold_sec,
+		"predicted_total": info.get("predicted_total", null), "signals": group.results,
+		"warmup": info.get("warmup", false), "session_index": info.get("session_index", 0),
+		"exposure": info.get("exposure", {}), "info": info,
+	}
+	write_event("encounter_ended", null, summary)
+	encounter_records.append(summary)
+	_write_encounter_row(summary)
+	groups.erase(group_id)
+	_last_finished = {"kind": "encounter", "id": group_id}
+	encounter_finished.emit(summary)
+	return summary
+
+func _write_encounter_row(summary: Dictionary) -> void:
+	if session.is_empty() or _finished:
+		return
+	if _encounter_csv == null:
+		_encounter_csv = FileAccess.open(output_directory.path_join(session + "_encounters.csv"), FileAccess.WRITE)
+		if _encounter_csv == null:
+			return
+		_encounter_csv.store_csv_line(PackedStringArray(ENCOUNTER_CSV_FIELDS))
+	var row := PackedStringArray()
+	for key in ENCOUNTER_CSV_FIELDS:
+		var value = summary.get(key)
+		if value is Dictionary or value is Array:
+			value = JSON.stringify(value)
+		row.append("" if value == null else str(value))
+	_encounter_csv.store_csv_line(row)
+	_encounter_csv.flush()
+
+# --- ratings ---
+
+# Felt difficulty for the most recently finished trial or encounter
+# (1 easy, 2 fine, 3 hard). Returns false when there is nothing to rate.
+func rate_last(value: int) -> bool:
+	if _last_finished.is_empty() or session.is_empty():
+		return false
+	var details := {"rating": clampi(value, 1, 3), "target": _last_finished.kind}
+	if _last_finished.kind == "trial":
+		details["trial"] = _last_finished.id
+	else:
+		details["encounter"] = _last_finished.id
+	write_event("rating", null, details)
+	_last_finished = {}
+	return true
+
+# --- exposure counts and tester memory (persist across sessions) ---
+
+# Element keys for a configuration: "puzzle.sniff", "ic.bouncer",
+# "enc.camera_corridor". Tiers are ignored: exposure is about familiarity.
+static func exposure_keys(config: Dictionary) -> Array[String]:
+	var keys: Array[String] = []
+	if config.has("template"):
+		keys.append("enc." + String(config.template))
+	if String(config.get("puzzle", "none")) != "none":
+		keys.append("puzzle." + String(config.puzzle))
+	for module in config.get("ic", []):
+		keys.append("ic." + String(module.ic))
+	return keys
+
+func _tester_path(name: String) -> String:
+	var safe := name.strip_edges().to_lower().validate_filename().replace(" ", "_")
+	return output_directory.path_join(TESTERS_DIR).path_join((safe if not safe.is_empty() else "tester") + ".json")
+
+func load_exposure(name: String = tester) -> Dictionary:
+	var parsed = _read_json(_tester_path(name))
+	return parsed.get("exposure", {}) if parsed is Dictionary else {}
+
+static func _read_json(path: String):
+	if not FileAccess.file_exists(path):
+		return null
+	var text := FileAccess.get_file_as_string(path)
+	return JSON.parse_string(text) if not text.strip_edges().is_empty() else null
+
+# Returns counts before this encounter and records one more exposure for each.
+func take_exposure(keys: Array[String]) -> Dictionary:
+	var counts := load_exposure()
+	var before := {}
+	for key in keys:
+		before[key] = int(counts.get(key, 0))
+		counts[key] = before[key] + 1
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(output_directory.path_join(TESTERS_DIR)))
+	var file := FileAccess.open(_tester_path(tester), FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify({"tester": tester, "exposure": counts}, "\t"))
+	return before
+
+func save_last_tester(name: String, skill: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(output_directory))
+	var file := FileAccess.open(output_directory.path_join(LAST_TESTER_FILE), FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify({"tester": name, "skill": skill}))
+
+func load_last_tester() -> Dictionary:
+	var parsed = _read_json(output_directory.path_join(LAST_TESTER_FILE))
+	return parsed if parsed is Dictionary else {}
