@@ -40,6 +40,8 @@ func _ready() -> void:
 		node.set_guard_revealed(false)
 
 	# --- speed toggle ---
+	var bar: RunnerSpeedBar = run_main.get_node_or_null("SignalTimeline/GridLayer/RunnerTeam/SpeedBar")
+	check("runner has a speed countdown bar", bar != null and bar.timeline_manager == timeline)
 	await _press("ui_right")
 	check("one press starts hustle", timeline.speed_mode == &"hustle" and is_equal_approx(timeline.current_speed_mult, timeline.fast_speed_modifier))
 	await _frames(int(10.0 * 60))
