@@ -109,7 +109,7 @@ func _run_intro_sequence() -> void:
 			"Your feed's locked on me, so the map moves as I do. Whatever's to my right, I'm walking into."
 		]
 	await _show_dialogue(intro_lines, "", window_manager.get_control_focus_rect(runner_focus_panel), Vector2(), false, 2, "intro_walk_and_talk")
-	_set_objective("- Wait for Blackjack to get into position\n- Press the [color=cyan]-> arrow key[/color] to tell him to hustle (15s; press again to extend).")
+	_set_objective("- Wait for Blackjack to get into position\n- Press the [color=cyan]UP arrow[/color] to tell him to hustle (15s; press again to extend).")
 
 func _run_cam_01_sequence() -> void:
 	await _wait_for_cell(1)
@@ -139,7 +139,7 @@ func _run_cam_01_sequence() -> void:
 		"Simple as. Just watch your heat. KILL is noisy, and more network noise means more attention from the system.",
 		"Runners don't like attention. For you, it might just mean more ICE. For us, it tends to come with bullet holes."
 	], "", Rect2(Vector2(0,1030), Vector2(100,5)), Vector2(50, 700), true, 5, "door_walk_and_talk")
-	_set_objective("- Wait for Blackjack to move ahead\n- Press the [color=cyan]-> arrow key[/color] to tell him to hustle (15s; press again to extend).")
+	_set_objective("- Wait for Blackjack to move ahead\n- Press the [color=cyan]UP arrow[/color] to tell him to hustle (15s; press again to extend).")
 
 
 func _run_door_01_sequence() -> void:
@@ -204,7 +204,7 @@ func _run_cam_02_intro_sequence() -> void:
 			"This camera is panning, too. Your call how to handle it.",
 			"You can KILL it and take the heat and I'll move past while it reboots, or you can let me know when it's safe to slip by while the camera pans away."
 		], "cam_02")
-	_set_objective("- Connect to cam_02 and KILL it OR\n- Press -> to have Blackjack hustle past while the camera is panned away")
+	_set_objective("- Connect to cam_02 and KILL it OR\n- Press UP to have Blackjack hustle past while the camera is panned away")
 
 	_enable_feature("terminal_commands", true)
 	
@@ -241,7 +241,7 @@ func _run_drone_01_intro_sequence():
 
 	await _wait_for_cell(16.5)
 	await _set_objective("- Help Blackjack through the gauntlet
-- Press <- or -> to have Blackjack slow down or speed up for 15 seconds (the other arrow cancels)
+- Press UP or DOWN to have Blackjack speed up or slow down for 15 seconds (the other arrow cancels)
 - Press F1 if you need a refresher on terminal commands")
 	await _show_dialogue([
 		"Long corridor coming up, lots of cameras and a few drones. No more hand-holding, kid. Let's see what you've got.",
@@ -516,7 +516,7 @@ func _run_gauntlet_sequence():
 	_show_dialogue([
 		"This is it. Cross your fingers and hit the Spike.\nReady when you are."
 	], "", Rect2(), _center_dialogue_pos(), true)
-	_set_objective("- Press Left Shift to activate the Null Spike
+	_set_objective("- Tap Ctrl to activate the Null Spike
 - Use your tools to help Blackjack get past the drones
 - RUN sniff or RUN decrypt to access locked signals
 - KILL exposed signals to disable them

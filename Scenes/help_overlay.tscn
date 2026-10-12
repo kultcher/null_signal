@@ -61,6 +61,11 @@ Syntax:
 - You can also specify a target for KILL, which will automatically switch to that session and execute the command. For example, if you type KILL cam_01 from anywhere.
 [JUST KIDDING SPECIFYING A TARGET DOESN\"T WORK CORRECTLY RIGHT NOW.]
  
+Controls:
+- UP arrow: Blackjack hustles for 15 seconds (press again to extend, DOWN cancels).
+- DOWN arrow: Blackjack slows down for 15 seconds (press again to extend, UP cancels).
+- Tap Ctrl: toggle the Null Spike.
+
 Notes:
 - Terminal commands are not case sensitive.
 
