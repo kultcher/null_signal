@@ -54,6 +54,7 @@ func _ready() -> void:
 	game.get_node("WindowManager").set_process_input(false)
 	game.get_node("TempQuitButton").hide()
 	GlobalEvents.first_null_spike = false
+	CommandDispatch.terminal_window.disruptions.immediate_keys = PackedInt32Array([KEY_F4, KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9, KEY_F10])
 	_build_extra_fields()
 	if settings.tester == "tester":
 		var last := recorder.load_last_tester()
@@ -130,11 +131,13 @@ func _update_running_trials() -> void:
 		_spawn_encounter()
 
 func _load_fields() -> void:
+	fields.get_node("Numbers/ic_count").max_value = GauntletSettings.DISRUPTIVE_IC.size() if settings.trial_source == "encounters" else settings.available_ic().size()
 	for key in NUMBER_FIELDS:
 		fields.get_node("Numbers/" + key).value = settings.get(key)
 	fields.get_node("EncounterRow/Source").select(1 if settings.trial_source == "encounters" else 0)
 	fields.get_node("EncounterRow/Host").select(1 if settings.host == "camera" else 0)
 	fields.get_node("Leads").text = GauntletSettings.format_leads(settings.lead_cells)
+	fields.get_node("EncounterDisruptions").button_pressed = settings.encounter_disruptions
 	for key in GauntletSettings.CAMERA_IC:
 		fields.get_node("Pools/IC/" + key).button_pressed = key in settings.ic_pool
 	for key in GauntletSettings.ENCOUNTERS:
@@ -149,6 +152,7 @@ func _load_fields() -> void:
 		fields.get_node("Pools/IC/" + key).button_pressed = key in settings.ic_pool
 	for key in GauntletSettings.PUZZLES:
 		fields.get_node("Pools/Puzzles/" + key).button_pressed = key in settings.puzzle_pool
+	_refresh_ic_controls()
 
 func apply_settings() -> void:
 	for key in NUMBER_FIELDS:
@@ -156,6 +160,7 @@ func apply_settings() -> void:
 	settings.trial_source = "encounters" if fields.get_node("EncounterRow/Source").selected == 1 else "elements"
 	settings.host = "camera" if fields.get_node("EncounterRow/Host").selected == 1 else "door"
 	settings.lead_cells = GauntletSettings.parse_leads(fields.get_node("Leads").text)
+	settings.encounter_disruptions = fields.get_node("EncounterDisruptions").button_pressed
 	settings.tester = fields.get_node("Tester").text.strip_edges()
 	settings.skill_tag = fields.get_node("Skill").text.strip_edges()
 	settings.isolated_elements = fields.get_node("Mode").selected == 0
@@ -309,6 +314,9 @@ func _spawn_encounter() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(case.seed)
 	var inst := template.generate(run, anchor, rng, "enc%03d_%s" % [_sequence, String(template_id).get_slice("_", 0)])
+	var preferred_role: String = {"watched_door": "door", "camera_corridor": "cam_fixed", "drone_patrol": "drone_1", "guard_patrol": "cam_reveal"}.get(String(template_id), "")
+	var added_ic: Array = []
+	var ic_host_role := ""
 	var built: Array = []
 	var keys: Array[String] = ["enc." + String(template_id)]
 	var predicted := 0.0
@@ -317,6 +325,11 @@ func _spawn_encounter() -> void:
 		var data := run.build_runtime_signal(spawn)
 		data.display_name = data.system_id
 		data.set_meta("auto_codex_popups", false)
+		var role: String = inst.roles.get(data.system_id, "")
+		if role == preferred_role and not case.get("ic", []).is_empty():
+			_apply_encounter_disruptions(run, data, case.ic)
+			added_ic = PlaytestRecorder.configuration(data).ic.filter(func(module): return module.ic in GauntletSettings.DISRUPTIVE_IC)
+			ic_host_role = role
 		if data.type == SignalData.Type.DOOR and data.detection != null:
 			data.detection.delay = settings.breach_delay_sec
 		var config := PlaytestRecorder.configuration(data)
@@ -334,7 +347,8 @@ func _spawn_encounter() -> void:
 		"flipped": inst.flipped, "seed": int(case.seed), "anchor_cell": anchor, "end_cell": inst.end_cell,
 		"lead_cells": float(case.lead), "window_sec": (first_cell - runner) / settings.runner_speed,
 		"predicted_total": predicted, "warmup": _sequence <= settings.warmup_trials, "session_index": _sequence,
-		"repeat": repeat, "concurrent": encounters.size(), "exposure": recorder.take_exposure(keys)}
+		"repeat": repeat, "concurrent": encounters.size(), "exposure": recorder.take_exposure(keys),
+		"added_ic": added_ic, "ic_host_role": ic_host_role, "ic_case": case.get("ic", []).duplicate(true)}
 	var group := recorder.begin_group(info)
 	var sigs: Array[ActiveSignal] = []
 	for item in built:
@@ -361,6 +375,8 @@ func _finish_encounter(enc: Dictionary, hint: String) -> void:
 func _encounter_finished(summary: Dictionary) -> void:
 	var info: Dictionary = summary.info
 	_last_encounter_case = {"template": info.template, "seed": info.seed, "lead": info.lead_cells}
+	if info.has("ic_case"):
+		_last_encounter_case["ic"] = info.ic_case.duplicate(true)
 	match summary.outcome:
 		"clean": _successes += 1
 		"heated": _heated += 1
@@ -494,6 +510,14 @@ func _build_extra_fields() -> void:
 		row.add_child(option)
 	fields.add_child(row)
 	fields.move_child(row, mode.get_index() + 1)
+	row.get_node("Source").item_selected.connect(func(_index): _refresh_ic_controls())
+	row.get_node("Host").item_selected.connect(func(_index): _refresh_ic_controls())
+	var modifiers := CheckButton.new()
+	modifiers.name = "EncounterDisruptions"
+	modifiers.text = "Add selected disruptive IC to one encounter host"
+	modifiers.toggled.connect(func(_enabled): _refresh_ic_controls())
+	fields.add_child(modifiers)
+	fields.move_child(modifiers, row.get_index() + 1)
 	var leads := fields.get_node("Tester").duplicate(0) as LineEdit
 	leads.name = "Leads"
 	leads.text = ""
@@ -503,11 +527,13 @@ func _build_extra_fields() -> void:
 	fields.move_child(leads, numbers.get_index() + 1)
 	var ic_grid: GridContainer = fields.get_node("Pools/IC")
 	var box_template: CheckBox = ic_grid.get_node("bouncer")
-	for key in GauntletSettings.CAMERA_IC:
+	for key in GauntletSettings.DOOR_IC + GauntletSettings.CAMERA_IC:
+		if ic_grid.has_node(key):
+			continue
 		var box := box_template.duplicate(0) as CheckBox
 		box.name = key
-		box.text = key.capitalize() + "*"
-		box.button_pressed = false
+		box.text = key.capitalize() + ("*" if key in GauntletSettings.CAMERA_IC else "")
+		box.button_pressed = key in settings.ic_pool
 		ic_grid.add_child(box)
 	var pool := GridContainer.new()
 	pool.name = "Encounters"
@@ -518,4 +544,37 @@ func _build_extra_fields() -> void:
 		box.name = key
 		box.text = key.capitalize()
 		pool.add_child(box)
-	fields.get_node("Note").text = "Single elements uses IC count as off/on; combinations use the exact count. *Camera host only.\nEncounters run whole templates; cadence > 0 overlaps them. F4/F5/F6 rate the last trial: easy/fine/hard."
+	fields.get_node("Note").text = "Single elements uses IC count as off/on; combinations use the exact count. *Camera host only.\nEncounters keep their template puzzles/IC. Optional added disruption uses the six new IC on one host.\nBaseline means no added disruption; cadence > 0 overlaps encounters. Rate the last trial: F4/F5/F6."
+
+func _refresh_ic_controls() -> void:
+	var encounters_mode: bool = fields.get_node("EncounterRow/Source").selected == 1
+	var camera_host: bool = fields.get_node("EncounterRow/Host").selected == 1
+	var available: Array = GauntletSettings.DISRUPTIVE_IC if encounters_mode else (GauntletSettings.DOOR_IC + GauntletSettings.CAMERA_IC if camera_host else GauntletSettings.DOOR_IC)
+	fields.get_node("Numbers/ic_count").max_value = available.size()
+	fields.get_node("EncounterRow/Host").disabled = encounters_mode
+	fields.get_node("EncounterDisruptions").disabled = not encounters_mode
+	fields.get_node("Baseline").text = "Include original template (no added disruption)" if encounters_mode else "Include unprotected baseline"
+	fields.get_node("Mode").set_item_text(0, "Single additions: original template or one IC" if encounters_mode else "Single elements: baseline, one IC, or one puzzle")
+	fields.get_node("Mode").set_item_text(1, "Combined additions: selected IC count" if encounters_mode else "Combinations: selected IC count + optional puzzle")
+	fields.get_node("Puzzle").disabled = encounters_mode
+	for key in ["puzzle_min", "puzzle_max"]:
+		fields.get_node("Numbers/" + key).editable = not encounters_mode
+	for key in GauntletSettings.PUZZLES:
+		fields.get_node("Pools/Puzzles/" + key).disabled = encounters_mode
+	for key in GauntletSettings.DOOR_IC + GauntletSettings.CAMERA_IC:
+		fields.get_node("Pools/IC/" + key).disabled = not key in available
+
+func _apply_encounter_disruptions(run: RunDefinition, data: SignalData, requested: Array) -> void:
+	if data.ic_modules == null:
+		data.ic_modules = ICComponent.new()
+	for entry in requested:
+		if not entry.ic in GauntletSettings.DISRUPTIVE_IC:
+			continue
+		# Do not stack duplicate module types if an authored template already
+		# contains this IC; the selected profile replaces that instance.
+		for index in range(data.ic_modules.modules.size() - 1, -1, -1):
+			if PlaytestRecorder.ic_key(data.ic_modules.modules[index]) == entry.ic:
+				data.ic_modules.modules.remove_at(index)
+		var module := run.build_ic(entry.ic, entry.difficulty) as ICModule
+		module.set_custom_fixed()
+		data.ic_modules.add_module(module)

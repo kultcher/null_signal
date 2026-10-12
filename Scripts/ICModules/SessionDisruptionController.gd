@@ -8,6 +8,8 @@ var terminal: Control
 var sessions: Dictionary = {}
 var clock := 0.0
 var presentation_suspended := false
+# Debug/session controls supplied by the host scene are not terminal typing.
+var immediate_keys := PackedInt32Array()
 var overlay_layer: CanvasLayer
 var input_overlay: DegradedInputOverlay
 var _drafts: Dictionary = {}
@@ -109,6 +111,8 @@ func _create_editor(state: Dictionary) -> void:
 
 func _input(event: InputEvent) -> void:
 	if not event is InputEventKey or presentation_suspended or not terminal.command_line.has_focus() or not terminal.command_line.editable:
+		return
+	if event.keycode in immediate_keys:
 		return
 	var state := _state(terminal.active_signal)
 	if not state.modules.has(&"lag"):

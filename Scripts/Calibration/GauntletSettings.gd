@@ -1,7 +1,8 @@
 class_name GauntletSettings extends Resource
 
 # These modules can affect a single door without additional targets.
-const DOOR_IC := ["bouncer", "callback", "faraday", "haze", "trace", "shy", "siphon"]
+const DISRUPTIVE_IC := ["lag", "spammer", "degrade", "blackout", "glitch", "redact"]
+const DOOR_IC := ["bouncer", "callback", "faraday", "haze", "trace", "shy", "siphon"] + DISRUPTIVE_IC
 const PUZZLES := ["sniff", "decrypt", "fuzz"]
 # These need their host disabled (OP can't do that to a door), so they run on
 # a camera host on the route instead.
@@ -14,7 +15,7 @@ const MAX_LEAD_CELLS := 7.0
 @export var shuffle_seed: int = 1
 @export var isolated_elements := true
 @export var include_baseline := true
-@export_range(0, 7, 1) var ic_count := 1
+@export_range(0, 16, 1) var ic_count := 1
 @export_range(1, 20, 1) var ic_min := 1
 @export_range(1, 20, 1) var ic_max := 1
 @export var ic_pool: PackedStringArray = PackedStringArray(DOOR_IC)
@@ -46,9 +47,19 @@ const MAX_LEAD_CELLS := 7.0
 @export var lead_cells: PackedFloat32Array = PackedFloat32Array()
 # The first N trials/encounters of a session are flagged warm-up.
 @export_range(0, 20, 1) var warmup_trials := 3
+# Compare an authored encounter to the same template with added disruption on
+# one designated host. Existing template puzzles and IC are retained.
+@export var encounter_disruptions := false
 
 func available_ic() -> Array:
 	return DOOR_IC + CAMERA_IC if host == "camera" else DOOR_IC.duplicate()
+
+func encounter_ic_pool() -> PackedStringArray:
+	var result := PackedStringArray()
+	for key in ic_pool:
+		if key in DISRUPTIVE_IC:
+			result.append(key)
+	return result
 
 func normalized_copy() -> GauntletSettings:
 	var copy := duplicate(true) as GauntletSettings
@@ -87,6 +98,8 @@ func normalized_copy() -> GauntletSettings:
 			copy.lead_cells.append(value)
 	copy.lead_cells.sort()
 	copy.warmup_trials = maxi(0, warmup_trials)
+	if copy.trial_source == "encounters":
+		copy.ic_count = mini(copy.ic_count, copy.encounter_ic_pool().size())
 	return copy
 
 # "3, 5, 8" -> [3, 5, 8]; blank or invalid entries are dropped.

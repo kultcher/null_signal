@@ -166,6 +166,7 @@ Events:
 | `command` | `command`, `ok`, `blocked_by` (IC id, if any) |
 | `puzzle_opened` / `puzzle_solved` / `puzzle_failed` / `puzzle_closed` | `puzzle` (sniff/decrypt/fuzz), `difficulty`, `attempts` |
 | `ic_triggered` / `ic_neutralized` | `ic` (codex id without prefix), `difficulty` |
+| `ic_disruption` | `ic`, `difficulty`, `phase` (started/ended, queued/submitted, spawned/dismissed, fake_clicked), host trial and effect details |
 | `detected` | `by` (system_id), `heat_delta` |
 | `hold_started` / `hold_ended` | runner held |
 | `signal_resolved` | `how` (disabled, looped, unlocked, bypassed, ignored) |

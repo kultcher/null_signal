@@ -33,11 +33,11 @@ var _encounter_csv: FileAccess
 var _last_detector: ActiveSignal
 var _last_finished := {} # {"kind": "trial"/"encounter", "id": ...} for ratings
 
-const ENCOUNTER_CSV_FIELDS := ["session", "tester", "skill", "encounter", "template", "outcome", "wildcard", "difficulty", "lead_cells", "window_sec", "visible_to_pass_sec", "spawn_to_end_sec", "heat", "damage", "hold_sec", "predicted_total", "signals", "warmup", "session_index", "exposure"]
+const ENCOUNTER_CSV_FIELDS := ["session", "tester", "skill", "encounter", "template", "outcome", "wildcard", "difficulty", "lead_cells", "window_sec", "visible_to_pass_sec", "spawn_to_end_sec", "heat", "damage", "hold_sec", "predicted_total", "signals", "warmup", "session_index", "exposure", "added_ic", "ic_host_role", "disruption_counts"]
 const TESTERS_DIR := "testers"
 const LAST_TESTER_FILE := "last_tester.json"
 
-const CSV_FIELDS := ["session", "tester", "skill", "trial", "signal", "outcome", "case_key", "repeat_of", "visible_to_clear_sec", "interaction_to_clear_sec", "visible_to_end_sec", "interaction_to_end_sec", "spawn_to_end_sec", "game_duration_sec", "hold_sec", "command_count", "failed_commands", "puzzle_attempts", "puzzle_errors", "ic_events", "heat", "null_spike_used", "programs_used", "config_json"]
+const CSV_FIELDS := ["session", "tester", "skill", "trial", "signal", "outcome", "case_key", "repeat_of", "visible_to_clear_sec", "interaction_to_clear_sec", "visible_to_end_sec", "interaction_to_end_sec", "spawn_to_end_sec", "game_duration_sec", "hold_sec", "command_count", "failed_commands", "puzzle_attempts", "puzzle_errors", "ic_events", "heat", "null_spike_used", "programs_used", "config_json", "disruption_counts"]
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -64,6 +64,7 @@ func _ready() -> void:
 	if CommandDispatch.terminal_window != null:
 		CommandDispatch.terminal_window.session_closed.connect(_session_closed)
 		CommandDispatch.terminal_window.connection_ready.connect(func(sig: ActiveSignal): observe(sig, "connection_ready"))
+		CommandDispatch.terminal_window.disruptions.effect_event.connect(_disruption_event)
 	if auto_record_visible_signals:
 		var manager = CommandDispatch.timeline_manager.get_node_or_null("../../RunManager") if CommandDispatch.timeline_manager != null else null
 		var name := String(manager.current_run.get_run_id()) if manager != null and manager.current_run != null else "normal_play"
@@ -144,7 +145,7 @@ func watch_signal(sig: ActiveSignal, config: Dictionary, repeat_of: int = 0, gro
 	_trial_number += 1
 	if groups.has(group_id):
 		groups[group_id].trials.append(_trial_number)
-	active[sig.get_instance_id()] = {"sig": sig, "trial": _trial_number, "group": group_id, "detected": false, "damage": 0.0, "config": config, "repeat_of": repeat_of, "started": wall_clock, "game_started": game_clock, "visible": null, "interaction": null, "hold_start": null, "hold_sec": 0.0, "commands": 0, "failed_commands": 0, "puzzle_attempts": 0, "puzzle_errors": 0, "ic_events": 0, "heat": 0.0, "null_spike_used": false, "programs_used": [], "disconnect_reason": "player"}
+	active[sig.get_instance_id()] = {"sig": sig, "trial": _trial_number, "group": group_id, "detected": false, "damage": 0.0, "config": config, "repeat_of": repeat_of, "started": wall_clock, "game_started": game_clock, "visible": null, "interaction": null, "hold_start": null, "hold_sec": 0.0, "commands": 0, "failed_commands": 0, "puzzle_attempts": 0, "puzzle_errors": 0, "ic_events": 0, "heat": 0.0, "null_spike_used": false, "programs_used": [], "disconnect_reason": "player", "disruption_counts": {}}
 	observe(sig, "trial_started", {"config": config, "repeat_of": repeat_of})
 	return _trial_number
 
@@ -192,7 +193,8 @@ func finish_trial(sig: ActiveSignal, outcome: String, how: String = "") -> void:
 		"failed_commands": trial.failed_commands, "puzzle_attempts": trial.puzzle_attempts,
 		"puzzle_errors": trial.puzzle_errors, "ic_events": trial.ic_events,
 		"heat": trial.heat, "null_spike_used": trial.null_spike_used, "config": trial.config,
-		"group": trial.group, "detected": trial.detected, "damage": trial.damage
+		"group": trial.group, "detected": trial.detected, "damage": trial.damage,
+		"disruption_counts": trial.disruption_counts.duplicate()
 	}
 	observe(sig, "signal_resolved", {"how": how, "outcome": outcome})
 	summary["programs_used"] = trial.programs_used
@@ -202,6 +204,8 @@ func finish_trial(sig: ActiveSignal, outcome: String, how: String = "") -> void:
 		var row := PackedStringArray()
 		for key in CSV_FIELDS:
 			var value = JSON.stringify(summary.config) if key == "config_json" else summary.get(key)
+			if value is Dictionary or value is Array:
+				value = JSON.stringify(value)
 			row.append("" if value == null else str(value))
 		_csv.store_csv_line(row)
 		_csv.flush()
@@ -213,7 +217,7 @@ func finish_trial(sig: ActiveSignal, outcome: String, how: String = "") -> void:
 	else:
 		var group: Dictionary = groups.get(trial.group, {})
 		if not group.is_empty():
-			group.results.append({"signal": sig.data.system_id, "role": trial.config.get("role", ""), "outcome": outcome, "how": how, "heat": trial.heat, "detected": trial.detected})
+			group.results.append({"signal": sig.data.system_id, "role": trial.config.get("role", ""), "outcome": outcome, "how": how, "heat": trial.heat, "detected": trial.detected, "disruption_counts": trial.disruption_counts.duplicate()})
 	trial_finished.emit(summary)
 
 func write_event(event: String, sig: ActiveSignal = null, details: Dictionary = {}) -> void:
@@ -268,6 +272,20 @@ func _scan_layer(data: SignalData, depth: int) -> void:
 			var index := depth - 1
 			_data_event(data, "scan_layer_complete", {"layer_index": index, "layer": trial.sig.scan_layers[index].name, "duration_sec": trial.sig.scan_layers[index].duration})
 			return
+
+func _disruption_event(sig: ActiveSignal, effect: StringName, phase: StringName, details: Dictionary) -> void:
+	var trial := _trial(sig)
+	if trial.is_empty():
+		return
+	var key := "%s.%s" % [effect, phase]
+	trial.disruption_counts[key] = int(trial.disruption_counts.get(key, 0)) + 1
+	# The first queued key is an interaction, even though Lag has not yet
+	# delivered a command to the resolver. Retain its actual timestamp.
+	if effect == &"lag" and phase == &"queued" and trial.interaction == null:
+		trial.interaction = wall_clock
+	var observation := details.duplicate()
+	observation.merge({"ic": String(effect), "difficulty": _ic_difficulty(sig, String(effect)), "phase": String(phase)}, true)
+	observe(sig, "ic_disruption", observation)
 
 func _observation(sig: ActiveSignal, event: String, details: Dictionary) -> void:
 	observe(sig, event, details)
@@ -479,6 +497,7 @@ static func resource_values(resource: Resource) -> Dictionary:
 
 static func configuration(data: SignalData) -> Dictionary:
 	var config := {"puzzle": "none", "difficulty": 0, "ic": [], "resolved_puzzle": {}}
+	config["host"] = SignalData.Type.keys()[data.type].to_lower()
 	if data.puzzle != null:
 		config.puzzle = puzzle_key(data.puzzle.puzzle_type)
 		config.difficulty = data.puzzle.difficulty if config.puzzle != "none" else 0
@@ -537,6 +556,10 @@ func end_group(group_id: String, hint: String = "") -> Dictionary:
 		else:
 			outcome = "clean"
 	var info: Dictionary = group.info
+	var disruption_counts := {}
+	for result in group.results:
+		for key in result.get("disruption_counts", {}):
+			disruption_counts[key] = int(disruption_counts.get(key, 0)) + int(result.disruption_counts[key])
 	var summary := {
 		"session": session, "tester": tester, "skill": skill_tag,
 		"encounter": group_id, "template": info.get("template", ""), "outcome": outcome,
@@ -548,6 +571,8 @@ func end_group(group_id: String, hint: String = "") -> Dictionary:
 		"predicted_total": info.get("predicted_total", null), "signals": group.results,
 		"warmup": info.get("warmup", false), "session_index": info.get("session_index", 0),
 		"exposure": info.get("exposure", {}), "info": info,
+		"added_ic": info.get("added_ic", []), "ic_host_role": info.get("ic_host_role", ""),
+		"disruption_counts": disruption_counts,
 	}
 	write_event("encounter_ended", null, summary)
 	encounter_records.append(summary)

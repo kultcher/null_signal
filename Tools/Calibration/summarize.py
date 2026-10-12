@@ -55,6 +55,17 @@ def overlap(start, end, intervals):
     return total
 
 
+def disruption_counts(result, events=()):
+    counts = result.get("disruption_counts")
+    if isinstance(counts, dict):
+        return counts
+    counts = defaultdict(int)
+    for event in events:
+        if event.get("event") == "ic_disruption":
+            counts[f"{event['ic']}.{event['phase']}"] += 1
+    return dict(counts)
+
+
 def summarize(paths, tester=None, skill=None, include_warmup=False):
     trials, sessions, incomplete, warnings = [], [], [], []
     encounters, ratings = [], {}
@@ -89,14 +100,19 @@ def summarize(paths, tester=None, skill=None, include_warmup=False):
     for result, events in trials:
         if tester and result.get("tester") != tester or skill and result.get("skill") != skill:
             continue
-        config = result["config"]
+        config = dict(result["config"])
+        # Older ordinary-play logs carry the host in sig_type instead. The
+        # first gauntlet only had doors, so truly missing metadata defaults
+        # to door; normalize before hashing or matching baselines.
+        config.setdefault("host", str(result.get("sig_type") or "door").lower())
+        result = {**result, "config": config}
         if config.get("warmup") and not include_warmup:
             skipped_warmup += 1
             continue
         in_encounter = bool(config.get("encounter"))
         signature = tuning_signature(config)
         key = (result["case_key"], signature, result.get("tester", ""), result.get("skill", ""))
-        group = groups.setdefault(key, {"case_key": key[0], "signature": signature, "tester": key[2], "skill": key[3], "config": config, "outcomes": defaultdict(int), "clear": [], "interaction": [], "failure_elapsed": [], "failed_commands": 0, "heat": 0.0, "ratings": []})
+        group = groups.setdefault(key, {"case_key": key[0], "signature": signature, "tester": key[2], "skill": key[3], "config": config, "outcomes": defaultdict(int), "clear": [], "interaction": [], "failure_elapsed": [], "failed_commands": 0, "heat": 0.0, "ratings": [], "disruption_counts": defaultdict(int)})
         rating = ratings.get(("trial", result.get("session"), result.get("trial")))
         if rating is not None:
             group["ratings"].append(rating)
@@ -104,6 +120,8 @@ def summarize(paths, tester=None, skill=None, include_warmup=False):
         group["outcomes"][outcome] += 1
         group["failed_commands"] += result.get("failed_commands", 0)
         group["heat"] += result.get("heat", 0)
+        for label, count in disruption_counts(result, events).items():
+            group["disruption_counts"][label] += count
         if outcome == "success":
             if result.get("visible_to_clear_sec") is not None:
                 group["clear"].append(result["visible_to_clear_sec"])
@@ -113,10 +131,10 @@ def summarize(paths, tester=None, skill=None, include_warmup=False):
             group["failure_elapsed"].append(result["spawn_to_end_sec"])
         if not in_encounter and outcome not in {"skipped", "repeated", "interrupted"}:
             lead = config.get("lead_cells", -1)
-            curve[(result["case_key"], lead, result.get("tester", ""), result.get("skill", ""))].append((outcome == "success", config.get("window_sec")))
+            curve[(result["case_key"], lead, result.get("tester", ""), result.get("skill", ""), config.get("host", "door"))].append((outcome == "success", config.get("window_sec")))
             predicted = (config.get("predicted") or {}).get("total")
             if outcome == "success" and predicted is not None and result.get("interaction_to_clear_sec") is not None:
-                prediction[result["case_key"]].append((predicted, result["interaction_to_clear_sec"]))
+                prediction[(result["case_key"], config.get("host", "door"))].append((predicted, result["interaction_to_clear_sec"]))
         # Encounter members are context, not isolated cost samples.
         if in_encounter:
             continue
@@ -189,12 +207,12 @@ def summarize(paths, tester=None, skill=None, include_warmup=False):
             residuals.append({"result": result, "duration": result["interaction_to_clear_sec"], "scan": scan_duration})
     group_rows = []
     for group in groups.values():
-        group_rows.append({"case_key": group["case_key"], "signature": group["signature"], "tester": group["tester"], "skill": group["skill"], "trials": sum(group["outcomes"].values()), "outcomes": dict(group["outcomes"]), "clear": stats(group["clear"]), "interaction": stats(group["interaction"]), "failure_elapsed": stats(group["failure_elapsed"]), "scan": stats(group.get("scan", [])), "background": stats(group.get("background", [])), "failed_commands": group["failed_commands"], "heat": group["heat"], "rating": mean_or_none(group["ratings"]), "ratings": len(group["ratings"]), "config": group["config"]})
+        group_rows.append({"case_key": group["case_key"], "signature": group["signature"], "tester": group["tester"], "skill": group["skill"], "trials": sum(group["outcomes"].values()), "outcomes": dict(group["outcomes"]), "clear": stats(group["clear"]), "interaction": stats(group["interaction"]), "failure_elapsed": stats(group["failure_elapsed"]), "scan": stats(group.get("scan", [])), "background": stats(group.get("background", [])), "failed_commands": group["failed_commands"], "heat": group["heat"], "disruption_counts": dict(group["disruption_counts"]), "rating": mean_or_none(group["ratings"]), "ratings": len(group["ratings"]), "config": group["config"]})
     component_rows = [{"key": key[0], "signature": key[1], "channel": key[2], **stats(values)} for key, values in sorted(components.items())]
     # IC residuals are whole-task overhead, not a defensible attention split.
     # Match baselines by tester, skill, speed and breach window.
     baseline = defaultdict(list)
-    context = lambda r: (r.get("tester"), r.get("skill"), r["config"].get("runner_speed"), r["config"].get("breach_delay_sec"))
+    context = lambda r: (r.get("tester"), r.get("skill"), r["config"].get("runner_speed"), r["config"].get("breach_delay_sec"), r["config"].get("host", "door"), r["config"].get("lead_cells", -1))
     for row in residuals:
         if not row["result"]["config"].get("ic"):
             baseline[context(row["result"])].append(row)
@@ -210,14 +228,14 @@ def summarize(paths, tester=None, skill=None, include_warmup=False):
         overhead[(key, tuning_signature(result["config"]))].append(delta)
     overhead_rows = [{"key": key[0], "signature": key[1], "classification": "unattributed_baseline_delta", **stats(values)} for key, values in sorted(overhead.items())]
     curve_rows = []
-    for (case_key, lead, row_tester, row_skill), samples in sorted(curve.items(), key=lambda item: (item[0][0], item[0][1])):
+    for (case_key, lead, row_tester, row_skill, host), samples in sorted(curve.items(), key=lambda item: (item[0][0], item[0][1], item[0][4])):
         windows = [w for _, w in samples if w is not None]
         successes = sum(1 for ok, _ in samples if ok)
-        curve_rows.append({"case_key": case_key, "lead_cells": lead, "tester": row_tester, "skill": row_skill, "trials": len(samples), "successes": successes, "success_rate": successes / len(samples), "window_sec": median(windows) if windows else None})
+        curve_rows.append({"case_key": case_key, "host": host, "lead_cells": lead, "tester": row_tester, "skill": row_skill, "trials": len(samples), "successes": successes, "success_rate": successes / len(samples), "window_sec": median(windows) if windows else None})
     prediction_rows = []
-    for case_key, pairs in sorted(prediction.items()):
+    for (case_key, host), pairs in sorted(prediction.items()):
         residual = [actual - predicted for predicted, actual in pairs]
-        prediction_rows.append({"case_key": case_key, "samples": len(pairs), "predicted": median(p for p, _ in pairs), "actual": median(a for _, a in pairs), "residual": stats(residual)})
+        prediction_rows.append({"case_key": case_key, "host": host, "samples": len(pairs), "predicted": median(p for p, _ in pairs), "actual": median(a for _, a in pairs), "residual": stats(residual)})
     encounter_rows = summarize_encounters(encounters, ratings, tester, skill, include_warmup)
     return {"version": 2, "sessions": len(sessions), "incomplete_trials": len(incomplete), "warmup_trials_skipped": skipped_warmup, "groups": group_rows, "components": component_rows, "ic_overhead": overhead_rows, "window_curve": curve_rows, "prediction": prediction_rows, "encounters": encounter_rows, "warnings": warnings, "notes": ["Clear percentiles include successful trials only; consult breach counts and failure elapsed times for censoring.", "Component samples use unassisted successful isolated trials. Base costs use unprotected baselines only. Keep tester/skill filters consistent.", "Connect ends at connection_ready; command and Callback timing start there, excluding connection reveal time.", "Puzzle open-to-solve and Callback response are observed elapsed times, classified as blocking per ThreatAndCost; they are not measured cognitive attention.", "IC baseline deltas are descriptive overhead and are not automatically assigned to blocking/background.", "Same difficulty can have multiple tuning signatures; candidates require a single signature per component.", "Warm-up trials/encounters are excluded unless --include-warmup. Encounter member trials never feed component costs.", "window_curve: success rate per case and spawn lead (cells ahead; -1 = screen edge). prediction: observed interaction-to-clear minus the CostTable estimate made at spawn.", "encounters: outcome is the worst of damaged > breached > heated > clean; predicted_total assumes every member is solved."]}
 
@@ -241,13 +259,18 @@ def summarize_encounters(events, ratings, tester=None, skill=None, include_warmu
             continue
         if event.get("outcome") in {"skipped", "repeated", "interrupted"}:
             continue
-        key = (event.get("template"), wildcard_label(event.get("wildcard")), event.get("difficulty"), event.get("lead_cells", -1), event.get("tester", ""), event.get("skill", ""))
-        group = groups.setdefault(key, {"outcomes": defaultdict(int), "pass": [], "heat": [], "damage": 0.0, "predicted": [], "ratings": [], "concurrent": 0})
+        added_ic = event.get("added_ic", (event.get("info") or {}).get("added_ic", []))
+        ic_host_role = event.get("ic_host_role", (event.get("info") or {}).get("ic_host_role", ""))
+        ic_signature = tuning_signature({"ic": added_ic}) if added_ic else "none"
+        key = (event.get("template"), wildcard_label(event.get("wildcard")), event.get("difficulty"), event.get("lead_cells", -1), event.get("tester", ""), event.get("skill", ""), ic_signature, ic_host_role)
+        group = groups.setdefault(key, {"outcomes": defaultdict(int), "pass": [], "heat": [], "damage": 0.0, "predicted": [], "ratings": [], "concurrent": 0, "added_ic": added_ic, "disruption_counts": defaultdict(int)})
         group["outcomes"][event["outcome"]] += 1
         if event.get("visible_to_pass_sec") is not None:
             group["pass"].append(event["visible_to_pass_sec"])
         group["heat"].append(event.get("heat", 0.0))
         group["damage"] += event.get("damage", 0.0)
+        for label, count in disruption_counts(event).items():
+            group["disruption_counts"][label] += count
         if event.get("predicted_total") is not None:
             group["predicted"].append(event["predicted_total"])
         if (event.get("info") or {}).get("concurrent"):
@@ -258,7 +281,7 @@ def summarize_encounters(events, ratings, tester=None, skill=None, include_warmu
     rows = []
     for key, group in sorted(groups.items(), key=lambda item: tuple(str(part) for part in item[0])):
         total = sum(group["outcomes"].values())
-        rows.append({"template": key[0], "wildcard": key[1], "difficulty": key[2], "lead_cells": key[3], "tester": key[4], "skill": key[5], "encounters": total, "outcomes": dict(group["outcomes"]), "clean_rate": group["outcomes"].get("clean", 0) / total, "visible_to_pass": stats(group["pass"]), "heat": stats(group["heat"]), "damage": group["damage"], "predicted_total": median(group["predicted"]) if group["predicted"] else None, "rating": mean_or_none(group["ratings"]), "ratings": len(group["ratings"]), "overlapped": group["concurrent"]})
+        rows.append({"template": key[0], "wildcard": key[1], "difficulty": key[2], "lead_cells": key[3], "tester": key[4], "skill": key[5], "encounters": total, "outcomes": dict(group["outcomes"]), "clean_rate": group["outcomes"].get("clean", 0) / total, "visible_to_pass": stats(group["pass"]), "heat": stats(group["heat"]), "damage": group["damage"], "predicted_total": median(group["predicted"]) if group["predicted"] else None, "rating": mean_or_none(group["ratings"]), "ratings": len(group["ratings"]), "overlapped": group["concurrent"], "added_ic": group["added_ic"], "ic_signature": key[6], "ic_host_role": key[7], "disruption_counts": dict(group["disruption_counts"])})
     return rows
 
 

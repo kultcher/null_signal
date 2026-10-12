@@ -16,6 +16,9 @@ func configure(values: GauntletSettings) -> void:
 	bag.clear()
 	encounter_bag.clear()
 	sampled_combinations = false
+	if settings.trial_source == "encounters":
+		_build_encounters()
+		return
 	if settings.include_baseline:
 		matrix.append(_case())
 	if settings.isolated_elements:
@@ -108,14 +111,36 @@ func _with_leads(cases: Array[Dictionary]) -> Array[Dictionary]:
 func _build_encounters() -> void:
 	encounter_matrix.clear()
 	var leads: Array = Array(settings.lead_cells) if not settings.lead_cells.is_empty() else [-1.0]
+	var variants: Array[Dictionary] = [_case()]
+	var with_disruptions := settings.trial_source == "encounters" and settings.encounter_disruptions
+	if with_disruptions:
+		# Reuse the bounded element sampler for IC-only variants. Disable this
+		# option on the nested sampler, so it never recurses into modifiers.
+		var values := settings.duplicate(true) as GauntletSettings
+		values.trial_source = "elements"
+		values.encounter_disruptions = false
+		values.ic_pool = settings.encounter_ic_pool()
+		values.puzzle_enabled = false
+		values.lead_cells = PackedFloat32Array()
+		values.shuffle_seed = rng.randi()
+		var modifiers := GauntletSampler.new()
+		modifiers.configure(values)
+		variants = modifiers.matrix
+		sampled_combinations = modifiers.sampled_combinations
 	for template in settings.encounter_pool:
 		for lead in leads:
-			encounter_matrix.append({"template": template, "lead": float(lead)})
+			for variant in variants:
+				var entry := {"template": template, "lead": float(lead)}
+				if with_disruptions:
+					entry["ic"] = variant.ic.duplicate(true)
+				encounter_matrix.append(entry)
 
 # Shuffled bag of template x lead; each draw gets its own generation seed so a
 # repeat can rebuild the exact same placement.
 func next_encounter() -> Dictionary:
 	if encounter_bag.is_empty():
+		if settings.encounter_disruptions:
+			_build_encounters()
 		encounter_bag = encounter_matrix.duplicate(true)
 		for i in range(encounter_bag.size() - 1, 0, -1):
 			var j := rng.randi_range(0, i)

@@ -5,7 +5,7 @@ Choose a tester and experience tag, select element pools and tier ranges, then
 start. Settings can be reopened during play; they pause the session and apply
 to the next signal. The current trial keeps its recorded configuration.
 
-The corridor contains one door at a time, spawned just beyond the right edge.
+Door element mode contains one door at a time, spawned just beyond the right edge.
 The runner keeps moving. Contact starts the real door breach window (default
 three seconds). Successful OP immediately clears the trial; actual breach fails
 it. A breach records runner damage but does not open the normal game-over
@@ -32,11 +32,12 @@ larger ones draw fresh batches of 512 combinations. The baseline is optional.
 The seed reproduces configuration order; solutions and Callback strings stay
 fresh. Repeat carries `repeat_of` so it can be distinguished from normal trials.
 
-The door pool includes Bouncer, Callback, Faraday, Haze, Trace, Shy and Siphon.
-Reboot, Heartbeat and Tripwire depend on disabling their host, which OP does not
-do. Tether and Necromancer need other targets or a different host. Those need
-separate scenarios rather than misleading door measurements. Siphon currently
-adds heat, despite the older cost-table description referring to RAM.
+The door pool includes Bouncer, Callback, Faraday, Haze, Trace, Shy, Siphon,
+Lag, Spammer, Degrade, Blackout, Glitch and Redact. Camera hosts also accept
+Reboot, Heartbeat and Tripwire: these depend on disabling their host, which OP
+does not do to a door. Tether and Necromancer still need separate scenarios.
+Siphon currently adds heat, despite the older cost-table description referring
+to RAM.
 
 Difficulty ranges reserve tiers 1-20, but existing modules and puzzles still
 use their implemented profiles, including clamps and fallbacks. Every trial
@@ -158,9 +159,65 @@ fields are built in code, so the scene is unchanged).
   most recently detected the runner.
 
 Summary outputs added: `window_curve.csv`, `prediction.csv`, `encounters.csv`.
+Window curves and predictions are separated by host. IC overhead is matched
+to a baseline with the same tester, skill, speed, breach window, host and
+spawn lead; camera pass time is never compared to a door's OP time.
 
 Verification:
 
 ```sh
 godot --headless --fixed-fps 60 res://Tests/gauntlet_encounter_test.tscn
+```
+
+## Disruptive IC integration
+
+All six new IC are available in the ordinary element pool, alone or combined
+with other IC and a puzzle. The IC-count maximum follows the host: 13 for doors,
+16 for cameras. Missing selection checkboxes are generated from the eligible
+lists in `GauntletSettings`, so future additions do not require scene edits.
+
+For encounter trials, enable **Add selected disruptive IC to one encounter
+host**. The selected Lag/Spammer/Degrade/Blackout/Glitch/Redact pool, IC count and
+IC tier range then form additions to the template. Single-addition mode tests
+one IC/tier at a time; combination mode uses the exact selected count.
+**Include original template** adds cases with no added IC. Templates keep
+their authored puzzles and IC; puzzle controls are disabled in this mode.
+The option starts off, preserving the original encounter behavior.
+
+| Template | Host role receiving added IC |
+| --- | --- |
+| Watched door | `door` |
+| Camera corridor | `cam_fixed` |
+| Drone patrol | `drone_1` |
+| Guard patrol | `cam_reveal` |
+
+Every template/lead runs at every addition case. Large combination sets use
+the same bounded sampler as element trials. Repeat keeps the template seed
+and selected IC/tier recipe, while creating fresh module instances. Added IC
+replace an existing instance of the same type rather than stacking duplicates.
+Cadenced encounters retain separate host sessions and cleanup; a Blackout in
+one encounter cannot be cleared by closing another.
+
+`ic_disruption` events include the host signal/trial, `ic`, `difficulty`,
+`phase`, and effect details (delay, pending input, popup count/placement, etc.).
+`disruption_counts` are included in trial JSONL/CSV and aggregated in encounter
+JSONL/CSV and summary reports. Useful entries include `lag.queued`,
+`lag.submitted`, `spammer.spawned`, `spammer.dismissed`, and
+`glitch.fake_clicked`; session starts and manual disconnects are also recorded.
+These counters stay separate from the older `ic_events`, avoiding per-key
+inflation of that count.
+
+Encounter metadata includes `added_ic` with resolved profiles and
+`ic_host_role`. Summaries keep original templates, different added profiles,
+and different host roles separate. Encounter trials still never feed isolated
+component cost candidates. Old logs without friction counts remain readable;
+host is inferred from `sig_type` when available, otherwise legacy door logs
+default to `door`.
+
+F4–F10 remain immediate even with pending Lag input; F7 freezes effect timers
+and input delivery along with the recorder clocks.
+
+```sh
+godot --headless --fixed-fps 60 res://Tests/gauntlet_disruption_test.tscn
+python -m unittest discover -s Tools/Calibration -p 'test_*.py'
 ```
