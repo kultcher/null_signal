@@ -122,7 +122,9 @@ func _update_running_trials() -> void:
 	if current != null and _current_host == "camera" and runner > current.start_cell_index + 0.4:
 		var trial: Dictionary = recorder.active.get(current.get_instance_id(), {})
 		if not trial.is_empty():
-			recorder.finish_trial(current, "success" if float(trial.heat) <= 0.0 else "detected", "passed")
+			# Outcome is whether the camera saw the runner; heat alone can come
+			# from the camera's IC (Tripwire, Trace) without any detection.
+			recorder.finish_trial(current, "detected" if trial.detected else "success", "passed")
 	for enc in encounters.duplicate():
 		if runner > float(enc.end_cell) + 0.5:
 			_finish_encounter(enc, "")

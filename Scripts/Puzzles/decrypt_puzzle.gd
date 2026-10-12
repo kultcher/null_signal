@@ -71,15 +71,8 @@ func _ready():
 	_init_puzzle()
 	_start_timers()
 
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("null_spike") and not event.is_echo():
-		if not GlobalEvents.is_tutorial_feature_enabled("null_spike"):
-			return
-		if null_spike_active:
-			GlobalEvents.deactivate_null_spike.emit()
-		else:
-			GlobalEvents.activate_null_spike.emit()
-		get_viewport().set_input_as_handled()
+# Null Spike input is handled once, by TimelineManager (Ctrl tap); this
+# puzzle only reacts to the activate/deactivate signals.
 
 func _apply_linked_puzzle_config() -> void:
 	if linked_signal == null or linked_signal.data == null or linked_signal.data.puzzle == null:

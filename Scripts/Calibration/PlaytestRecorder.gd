@@ -125,13 +125,15 @@ func _process(delta: float) -> void:
 	if auto_record_visible_signals and CommandDispatch.signal_manager != null:
 		for sig in CommandDispatch.signal_manager.signal_queue:
 			if sig.instance_node != null and not sig.is_disabled and not sig.data.has_meta("telemetry_seen"):
-				var x: float = timeline.cell_to_screen_x(sig.start_cell_index)
+				var x: float = timeline.cell_to_screen_x(sig.runtime_cell_x if sig.runtime_position_initialized else sig.start_cell_index)
 				if x >= 0.0 and x <= timeline.screen_width:
 					sig.data.set_meta("telemetry_seen", true)
 					watch_signal(sig, configuration(sig.data))
 	for trial in active.values():
 		var sig: ActiveSignal = trial.sig
-		var x: float = timeline.cell_to_screen_x(sig.start_cell_index)
+		# Mobile signals render at their runtime position, not their spawn cell.
+		var cell: float = sig.runtime_cell_x if sig.runtime_position_initialized else sig.start_cell_index
+		var x: float = timeline.cell_to_screen_x(cell)
 		if trial.visible == null and sig.instance_node != null and x >= 0.0 and x <= timeline.screen_width:
 			observe(sig, "signal_visible")
 

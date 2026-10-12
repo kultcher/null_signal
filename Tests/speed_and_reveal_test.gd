@@ -58,31 +58,71 @@ func _ready() -> void:
 	# --- speed toggle ---
 	var bar: RunnerSpeedBar = run_main.get_node_or_null("SignalTimeline/GridLayer/RunnerTeam/SpeedBar")
 	check("runner has a speed countdown bar", bar != null and bar.timeline_manager == timeline)
-	await _press("ui_right")
-	check("one press starts hustle", timeline.speed_mode == &"hustle" and is_equal_approx(timeline.current_speed_mult, timeline.fast_speed_modifier))
+	# Real key events through the viewport, with the command line focused as
+	# in play, so the terminal bypass is exercised too.
+	var line: LineEdit = CommandDispatch.terminal_window.command_line
+	line.grab_focus()
+	line.text = "ACCESS cam_01"
+	line.caret_column = 6
+	await _key(KEY_UP)
+	check("UP starts hustle", timeline.speed_mode == &"hustle" and is_equal_approx(timeline.current_speed_mult, timeline.fast_speed_modifier))
+	check("UP doesn't touch the command line caret", line.caret_column == 6 and line.text == "ACCESS cam_01")
 	await _frames(int(10.0 * 60))
 	check("hustle still on after 10s without holding", timeline.speed_mode == &"hustle")
-	await _press("ui_right")
+	await _key(KEY_UP)
 	check("pressing again refreshes to the full duration", timeline.speed_time_left > timeline.speed_toggle_sec - 0.5)
 	await _frames(int(14.0 * 60))
 	check("refreshed hustle outlasts the original 15s", timeline.speed_mode == &"hustle")
 	await _frames(int(2.0 * 60))
 	check("hustle expires back to walking", timeline.speed_mode == &"walk" and is_equal_approx(timeline.current_speed_mult, 1.0))
-	await _press("ui_left")
-	check("left starts a timed slow", timeline.speed_mode == &"slow" and is_equal_approx(timeline.current_speed_mult, timeline.slow_speed_modifier))
-	await _press("ui_right")
-	check("the other key switches modes", timeline.speed_mode == &"hustle")
+	await _key(KEY_DOWN)
+	check("DOWN starts a timed slow", timeline.speed_mode == &"slow" and is_equal_approx(timeline.current_speed_mult, timeline.slow_speed_modifier))
+	check("DOWN doesn't touch the command line caret", line.caret_column == 6)
+	await _key(KEY_UP)
+	check("UP from a slowdown returns to walking", timeline.speed_mode == &"walk")
+	await _key(KEY_UP)
+	await _key(KEY_DOWN)
+	check("DOWN from a hustle returns to walking", timeline.speed_mode == &"walk")
+	await _key(KEY_LEFT)
+	await _key(KEY_RIGHT)
+	check("left/right no longer change speed", timeline.speed_mode == &"walk")
 	timeline.clear_speed_mode()
-	check("clear returns to walking", timeline.speed_mode == &"walk")
+	line.text = ""
+
+	# --- Null Spike: tap Ctrl ---
+	check("null spike starts off", not timeline.null_spike_active)
+	await _key(KEY_CTRL)
+	check("tapping Ctrl activates the Null Spike", timeline.null_spike_active)
+	await _key(KEY_CTRL)
+	check("tapping Ctrl again deactivates it", not timeline.null_spike_active)
+	# Ctrl as a modifier (paste) is not a tap.
+	_send(KEY_CTRL, true)
+	await get_tree().process_frame
+	_send(KEY_V, true, true)
+	_send(KEY_V, false, true)
+	_send(KEY_CTRL, false)
+	await _frames(3)
+	check("Ctrl+V doesn't toggle the Null Spike", not timeline.null_spike_active)
+	await _key(KEY_SHIFT)
+	check("Shift no longer toggles the Null Spike", not timeline.null_spike_active)
+	Engine.time_scale = 1.0
 
 	print("SPEED/REVEAL TEST: %d failures" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 
-func _press(action: String) -> void:
-	Input.action_press(action)
+func _send(code: Key, pressed: bool, ctrl := false) -> void:
+	var event := InputEventKey.new()
+	event.keycode = code
+	event.physical_keycode = code
+	event.pressed = pressed
+	event.ctrl_pressed = ctrl
+	Input.parse_input_event(event)
+
+func _key(code: Key) -> void:
+	_send(code, true)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	Input.action_release(action)
+	_send(code, false)
 	await get_tree().process_frame
 
 func _frames(count: int) -> void:

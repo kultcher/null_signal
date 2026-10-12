@@ -7,8 +7,8 @@ extends Node2D
 @export var BASE_CELLS_PER_SECOND: float = 0.15		# 0.2 ~= 30 seconds window from spawn to contact
 @export var slow_speed_modifier: float = 0.5
 @export var fast_speed_modifier: float = 3
-# Pressing slow (left) or hustle (right) holds that speed this long; pressing
-# the same key again refreshes it, the other key switches.
+# Pressing hustle (Up) or slow (Down) holds that speed this long; pressing
+# the same key again refreshes it, the other key returns to walking.
 @export var speed_toggle_sec: float = 15.0
 @export var null_spike_time_scale: float = 0.5
 @export var null_spike_transition_duration: float = 0.50
@@ -262,20 +262,46 @@ func _update_signal_sweep(delta: float) -> void:
 
 
 func _handle_input():
-	if Input.is_action_just_pressed("null_spike"):
-		toggle_null_spike()
-
-
-	# Runner speed: a press starts (or refreshes) a timed slow/hustle.
-	if Input.is_action_just_pressed("ui_left"):
-		set_speed_mode(&"slow")
-	elif Input.is_action_just_pressed("ui_right"):
-		set_speed_mode(&"hustle")
 	if speed_mode != &"walk":
 		speed_time_left -= get_process_delta_time()
 		if speed_time_left <= 0.0:
 			clear_speed_mode()
 	current_speed_mult = slow_speed_modifier if speed_mode == &"slow" else (fast_speed_modifier if speed_mode == &"hustle" else 1.0)
+
+# Runner controls are caught here, before any GUI (the terminal's command line
+# keeps focus during play), so they never reach text fields:
+# - Up (runner_hustle) / Down (runner_slow): start or refresh a timed speed
+#   change; the opposite key cancels back to walking. Consumed entirely, so
+#   the command line caret doesn't jump to the start/end.
+# - Ctrl (null_spike): toggles the Null Spike on a *tap*, i.e. on release with
+#   no other key pressed while held, so Ctrl+C / Ctrl+V / Ctrl+A still edit.
+var _null_spike_tap_armed := false
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		if event.is_action("runner_hustle") or event.is_action("runner_slow"):
+			if event.pressed and not event.echo:
+				_on_speed_key(&"hustle" if event.is_action("runner_hustle") else &"slow")
+			get_viewport().set_input_as_handled()
+			return
+		if event.is_action("null_spike"):
+			if event.pressed and not event.echo:
+				_null_spike_tap_armed = true
+			elif not event.pressed and _null_spike_tap_armed:
+				_null_spike_tap_armed = false
+				toggle_null_spike()
+			return
+		if event.pressed:
+			_null_spike_tap_armed = false
+	elif event is InputEventMouseButton and event.pressed:
+		_null_spike_tap_armed = false
+
+func _on_speed_key(mode: StringName) -> void:
+	var opposite := &"slow" if mode == &"hustle" else &"hustle"
+	if speed_mode == opposite:
+		clear_speed_mode()
+	else:
+		set_speed_mode(mode)
 
 # Starts or refreshes a timed speed change (&"slow" or &"hustle"). Also the
 # entry point for other input sources (e.g. voice commands).

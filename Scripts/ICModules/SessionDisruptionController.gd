@@ -121,6 +121,9 @@ func _create_editor(state: Dictionary) -> void:
 func _input(event: InputEvent) -> void:
 	if not event is InputEventKey or presentation_suspended or not terminal.command_line.has_focus() or not terminal.command_line.editable:
 		return
+	# Runner speed keys never edit text (TimelineManager consumes them).
+	if event.is_action("runner_hustle") or event.is_action("runner_slow"):
+		return
 	if event.keycode in immediate_keys:
 		return
 	var state := _state(terminal.active_signal)
