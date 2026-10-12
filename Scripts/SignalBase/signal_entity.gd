@@ -30,6 +30,16 @@ var _disruption_fake := false
 var _disruption_glitch := false
 var _tooltip_body_source := ""
 
+# Display blocks: independent systems hide parts of a signal for their own
+# reasons (a hidden guard, a Blackout, a Glitch decoy, later previews or
+# cutscenes). Each sets or clears its own reason; _apply_display() combines
+# them, so no system can undo another's. Never write visible /
+# input_pickable / tooltip_main.visible directly for these purposes.
+const BLOCK_VISIBLE := 1      # whole entity hidden
+const BLOCK_PICK := 2         # icon can't be clicked / hovered
+const BLOCK_TOOLTIP := 4      # tooltip hidden
+var _display_blocks: Dictionary = {}   # reason (StringName) -> block bits
+
 signal signal_interaction(data: SignalData)
 signal scan_toggle_requested(clicked_signal: ActiveSignal)
 signal tooltip_lock_requested(target_signal: ActiveSignal)
@@ -163,8 +173,7 @@ func set_guard_revealed(is_revealed: bool) -> void:
 
 	shape.visible = is_revealed
 	ic_effects.visible = is_revealed
-	tooltip_main.visible = is_revealed
-	signal_icon.input_pickable = is_revealed
+	set_display_block(&"hidden_guard", 0 if is_revealed else BLOCK_PICK | BLOCK_TOOLTIP)
 	detection_controller.set_overlay_visible(is_revealed)
 	if is_revealed:
 		_sync_session_indicator_state()
@@ -234,6 +243,29 @@ func append_tooltip(info: String):
 	_tooltip_body_source += info + "\n"
 	_refresh_disrupted_tooltip()
 
+# Sets (bits != 0) or clears (bits == 0) one reason's display block.
+func set_display_block(reason: StringName, bits: int) -> void:
+	if int(_display_blocks.get(reason, 0)) == bits:
+		return
+	if bits == 0:
+		_display_blocks.erase(reason)
+	else:
+		_display_blocks[reason] = bits
+	_apply_display()
+
+func is_display_blocked(bit: int) -> bool:
+	for bits in _display_blocks.values():
+		if int(bits) & bit:
+			return true
+	return false
+
+func _apply_display() -> void:
+	visible = not is_display_blocked(BLOCK_VISIBLE)
+	if signal_icon != null:
+		signal_icon.input_pickable = not is_display_blocked(BLOCK_PICK | BLOCK_VISIBLE)
+	if tooltip_main != null:
+		tooltip_main.visible = not is_display_blocked(BLOCK_TOOLTIP | BLOCK_VISIBLE)
+
 func _refresh_disrupted_tooltip() -> void:
 	var text := _tooltip_body_source
 	var terminal = CommandDispatch.terminal_window
@@ -242,6 +274,8 @@ func _refresh_disrupted_tooltip() -> void:
 	if tooltip_main.tt_body.text != text:
 		tooltip_main.tt_body.text = text
 
+# Called by SessionDisruptionController when this signal's disruption state
+# changes (not every frame).
 func apply_disruption_visuals(offset: Vector2, glitch: bool, fake: bool, blackout: bool) -> void:
 	# Shift the picture and its pointer target, never the entity root or its
 	# DetectionController collision shapes. Runner contact remains real.
@@ -259,16 +293,9 @@ func apply_disruption_visuals(offset: Vector2, glitch: bool, fake: bool, blackou
 		_disruption_glitch = glitch
 		_disruption_fake = fake
 		queue_redraw()
-	visible = not blackout
-	# Unrevealed guards stay hidden and unclickable (see set_guard_revealed);
-	# this runs every frame, so it must not override that.
-	var hidden_guard := _is_hidden_guard()
-	signal_icon.input_pickable = not blackout and not hidden_guard
-	tooltip_main.visible = not fake and not blackout and not hidden_guard
+	set_display_block(&"blackout", BLOCK_VISIBLE | BLOCK_PICK if blackout else 0)
+	set_display_block(&"glitch_decoy", BLOCK_TOOLTIP if fake else 0)
 	_refresh_disrupted_tooltip()
-
-func _is_hidden_guard() -> bool:
-	return my_data != null and my_data.type == SignalData.Type.GUARD and not _guard_revealed
 
 func _draw() -> void:
 	if not _disruption_glitch:
@@ -287,7 +314,7 @@ func hide_tooltip():
 	tooltip_main.hide()
 
 func show_hover_tooltip():
-	if _is_hidden_guard():
+	if is_display_blocked(BLOCK_TOOLTIP | BLOCK_VISIBLE):
 		return
 	tooltip_main.show()
 	refresh_status_panels()

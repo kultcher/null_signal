@@ -79,3 +79,26 @@ readability, popup placement/caps, Blackout ownership and unchanged Glitch
 detection/range. Run it headlessly alongside `regtest`, `ictest`,
 `calibration_gauntlet_test` and the viewer/restart tests when changing shared
 terminal code.
+
+## Signal display blocks
+
+Several systems hide parts of a signal for their own reasons: unrevealed
+guards, Blackout, Glitch decoys, and later section previews or cutscenes.
+They must not write `visible`, `signal_icon.input_pickable` or
+`tooltip_main.visible` directly, or they undo each other (unrevealed guards
+used to show their tooltips because the disruption update reset them every
+frame). Instead each system sets or clears its own reason:
+
+```gdscript
+entity.set_display_block(&"my_reason", entity.BLOCK_TOOLTIP | entity.BLOCK_PICK)
+entity.set_display_block(&"my_reason", 0)   # clear
+```
+
+`BLOCK_VISIBLE` hides the whole entity (and implies the other two),
+`BLOCK_PICK` stops clicks and hover, `BLOCK_TOOLTIP` hides the tooltip.
+`signal_entity._apply_display()` combines all reasons. Current reasons:
+`hidden_guard`, `blackout`, `glitch_decoy`.
+
+`SessionDisruptionController` pushes visuals only when a signal's disruption
+state changes (and on session open/close), and does nothing while no
+disruption session is active.
