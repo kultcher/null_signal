@@ -14,6 +14,11 @@ var overlay_layer: CanvasLayer
 var input_overlay: DegradedInputOverlay
 var _drafts: Dictionary = {}
 var _refresh_age := 0.0
+# Last disruption visuals pushed per signal instance, so entities are only
+# touched when their state changes (and not at all while nothing is active).
+var _applied_visuals: Dictionary = {}
+const _NO_STATE := {"modules": {}}
+const _NO_VISUALS := [Vector2.ZERO, false, false, false, false]
 
 func initialize(target: Control) -> void:
 	terminal = target
@@ -46,6 +51,8 @@ func open_session(sig: ActiveSignal) -> void:
 		_create_editor(state)
 	for key in modules:
 		effect_event.emit(sig, key, &"started", {})
+	# Apply Blackout / Glitch / Redact visuals now rather than next frame.
+	_update_signal_visuals()
 
 func close_session(sig: ActiveSignal) -> void:
 	if sig == null:
@@ -63,6 +70,8 @@ func close_session(sig: ActiveSignal) -> void:
 	sessions.erase(sig.get_instance_id())
 	if sig.terminal_session != null:
 		_drafts.erase(sig.terminal_session.get_instance_id())
+	# Restore visuals (and un-redacted tooltip text) immediately.
+	_update_signal_visuals()
 	_update_signal_visuals()
 	if terminal.active_signal == sig and not presentation_suspended:
 		terminal._set_history_text(terminal._history_source)
@@ -220,7 +229,8 @@ func _mirror_editor(state: Dictionary) -> void:
 		line.deselect()
 
 func _state(sig: ActiveSignal) -> Dictionary:
-	return sessions.get(sig.get_instance_id(), {"modules": {}}) if sig != null else {"modules": {}}
+	# Shared read-only default: callers only write to real session states.
+	return sessions.get(sig.get_instance_id(), _NO_STATE) if sig != null else _NO_STATE
 
 func has_effect(sig: ActiveSignal, key: StringName) -> bool:
 	return _state(sig).modules.has(key)
@@ -259,10 +269,27 @@ func _update_signal_visuals() -> void:
 	var manager = CommandDispatch.signal_manager
 	if manager == null:
 		return
+	if sessions.is_empty() and _applied_visuals.is_empty():
+		return
 	var blackout := is_blacked_out()
+	var seen := {}
 	for sig in manager.signal_queue:
-		if sig.instance_node != null and is_instance_valid(sig.instance_node):
-			sig.instance_node.apply_disruption_visuals(glitch_offset(sig), has_effect(sig, &"glitch"), glitch_phase(sig) != 0, blackout)
+		if sig.instance_node == null or not is_instance_valid(sig.instance_node):
+			continue
+		var node_id: int = sig.instance_node.get_instance_id()
+		seen[node_id] = true
+		# Redact is included so the tooltip text re-renders when it starts/ends.
+		var wanted := [glitch_offset(sig), has_effect(sig, &"glitch"), glitch_phase(sig) != 0, blackout, has_effect(sig, &"redact")]
+		if wanted == _applied_visuals.get(node_id, _NO_VISUALS):
+			continue
+		sig.instance_node.apply_disruption_visuals(wanted[0], wanted[1], wanted[2], wanted[3])
+		if wanted == _NO_VISUALS:
+			_applied_visuals.erase(node_id)
+		else:
+			_applied_visuals[node_id] = wanted
+	for node_id in _applied_visuals.keys():
+		if not seen.has(node_id):
+			_applied_visuals.erase(node_id)
 
 func security_text(sig: ActiveSignal, source: String) -> String:
 	var state := _state(sig)

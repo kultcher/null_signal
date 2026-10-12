@@ -34,9 +34,25 @@ func _ready() -> void:
 		check("unrevealed guard can't be clicked", not node.signal_icon.input_pickable)
 		node.show_hover_tooltip()
 		check("hovering a hidden guard shows nothing", not node.tooltip_main.visible)
-		node.set_guard_revealed(true)
+		# Blocks from different systems combine; clearing one keeps the other.
+		node.apply_disruption_visuals(Vector2.ZERO, false, false, true)
+		check("blackout hides the whole guard", not node.visible)
 		node.apply_disruption_visuals(Vector2.ZERO, false, false, false)
+		check("ending blackout restores the entity but keeps the guard hidden", node.visible and not node.tooltip_main.visible and not node.signal_icon.input_pickable)
+		node.set_guard_revealed(true)
 		check("revealed guard shows its tooltip", node.tooltip_main.visible and node.signal_icon.input_pickable)
+		# Any other system's block survives the per-frame updates.
+		node.set_display_block(&"test_block", node.BLOCK_TOOLTIP | node.BLOCK_PICK)
+		await _frames(30)
+		check("a block survives frames of reveal/disruption updates", not node.tooltip_main.visible and not node.signal_icon.input_pickable)
+		node.set_display_block(&"test_block", 0)
+		# In play the guard re-hid itself meanwhile (runner far, no camera), so
+		# the only block left is that one, and it resolves to what it says.
+		check("clearing a block leaves only the others", node._display_blocks.keys() == [&"hidden_guard"] and not node.tooltip_main.visible)
+		node.set_guard_revealed(true)
+		check("with no blocks left the tooltip and icon are back", node._display_blocks.is_empty() and node.tooltip_main.visible and node.signal_icon.input_pickable)
+		var disruptions = CommandDispatch.terminal_window.disruptions
+		check("idle disruption controller tracks nothing", disruptions.sessions.is_empty() and disruptions._applied_visuals.is_empty())
 		node.set_guard_revealed(false)
 
 	# --- speed toggle ---
