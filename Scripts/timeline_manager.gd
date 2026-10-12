@@ -284,15 +284,27 @@ func _input(event: InputEvent) -> void:
 				_on_speed_key(&"hustle" if event.is_action("runner_hustle") else &"slow")
 			get_viewport().set_input_as_handled()
 			return
+	observe_null_spike_key(event)
+
+var _last_observed_event: InputEvent
+
+# Ctrl-tap tracking. Called from _input and by any other handler that consumes
+# key events before they reach this node (the Lag IC queues and swallows keys),
+# so a tap is seen whichever handler runs first. The same event observed twice
+# is ignored.
+func observe_null_spike_key(event: InputEvent) -> void:
+	if event == _last_observed_event:
+		return
+	_last_observed_event = event
+	if event is InputEventKey:
 		if event.is_action("null_spike"):
 			if event.pressed and not event.echo:
 				_null_spike_tap_armed = true
 			elif not event.pressed and _null_spike_tap_armed:
 				_null_spike_tap_armed = false
 				toggle_null_spike()
-			return
-		if event.pressed:
-			_null_spike_tap_armed = false
+		elif event.pressed:
+			_null_spike_tap_armed = false   # a chord (Ctrl+V), not a tap
 	elif event is InputEventMouseButton and event.pressed:
 		_null_spike_tap_armed = false
 

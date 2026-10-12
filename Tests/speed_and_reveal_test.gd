@@ -105,6 +105,45 @@ func _ready() -> void:
 	check("Ctrl+V doesn't toggle the Null Spike", not timeline.null_spike_active)
 	await _key(KEY_SHIFT)
 	check("Shift no longer toggles the Null Spike", not timeline.null_spike_active)
+
+	# With a Lag session focused, the Lag IC queues and swallows keys before
+	# the timeline sees them; the Ctrl tap must still work.
+	var lag_data := RunDefinition.BASIC_DOOR.duplicate(true) as SignalData
+	lag_data.system_id = "lag_host"
+	lag_data.display_name = "lag_host"
+	lag_data.puzzle = null
+	lag_data.ic_modules = RunDefinition.new().make_ic([LagModule.new()])
+	lag_data.set_meta("auto_codex_popups", false)
+	sm.spawn_signal_data(lag_data, timeline.current_cell_pos + 2.0)
+	var lag_host: ActiveSignal = sm.signal_queue[-1]
+	sm.update_signal_position()
+	await _frames(3)
+	var terminal = CommandDispatch.terminal_window
+	terminal.switch_session(lag_host, false)
+	line.grab_focus()
+	line.edit()
+	var lag_open := false
+	for i in 300:
+		lag_open = terminal.disruptions.has_effect(lag_host, &"lag") and line.has_focus()
+		if lag_open:
+			break
+		await get_tree().process_frame
+	check("Lag session is active on the focused command line", lag_open)
+	await _key(KEY_CTRL)
+	check("Ctrl tap toggles the Null Spike during Lag", timeline.null_spike_active)
+	await _key(KEY_CTRL)
+	check("and toggles it back", not timeline.null_spike_active)
+	_send(KEY_CTRL, true)
+	await get_tree().process_frame
+	_send(KEY_V, true, true)
+	_send(KEY_V, false, true)
+	_send(KEY_CTRL, false)
+	await _frames(3)
+	check("Ctrl+V during Lag still isn't a tap", not timeline.null_spike_active)
+	await _key(KEY_UP)
+	check("UP still hustles during Lag", timeline.speed_mode == &"hustle")
+	timeline.clear_speed_mode()
+	Engine.time_scale = 1.0
 	Engine.time_scale = 1.0
 
 	print("SPEED/REVEAL TEST: %d failures" % failures)
