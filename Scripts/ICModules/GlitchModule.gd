@@ -1,4 +1,6 @@
 class_name GlitchModule extends DisruptionModule
+## Passive: the signal jumps between its real position and decoys whenever it
+## is live, connected or not (SessionDisruptionController tracks it).
 
 @export_range(2, 12, 1) var position_count := 3
 @export_range(0.1, 10.0, 0.05) var jump_interval_sec := 1.4
@@ -19,4 +21,4 @@ func apply_difficulty(difficulty: int) -> void:
 	warning_msg = get_desc()
 
 func get_connection_flow_lines(_sig: ActiveSignal) -> Array[String]:
-	return ["[color=orange]GLITCH[/color]: Unstable image. The solid cyan pip marks the real position."]
+	return ["[color=orange]GLITCH[/color]: Unstable image. Decoy positions shimmer; the real signal holds steady."]

@@ -17,6 +17,11 @@ var _refresh_age := 0.0
 # Last disruption visuals pushed per signal instance, so entities are only
 # touched when their state changes (and not at all while nothing is active).
 var _applied_visuals: Dictionary = {}
+# Glitch is passive: every live signal carrying a GlitchModule jumps between
+# its real and fake positions whether or not it's connected. signal instance
+# id -> {"sig", "module", "age"}; age starts at a random phase so several
+# glitching signals don't jump in sync.
+var _glitches: Dictionary = {}
 const _NO_STATE := {"modules": {}}
 const _NO_VISUALS := [Vector2.ZERO, false, false, false, false]
 
@@ -182,6 +187,7 @@ func _process(delta: float) -> void:
 			_deliver_input(state)
 		if state.modules.has(&"spammer"):
 			_tick_spammer(state, delta)
+	_update_glitches(delta)
 	_update_signal_visuals()
 	_refresh_age += delta
 	if _refresh_age >= 0.1:
@@ -248,18 +254,46 @@ func is_blacked_out() -> bool:
 			return true
 	return false
 
+func _update_glitches(delta: float) -> void:
+	var manager = CommandDispatch.signal_manager
+	if manager == null:
+		return
+	var live := {}
+	for sig in manager.signal_queue:
+		if sig == null or sig.is_disabled or sig.data == null or sig.data.ic_modules == null:
+			continue
+		for module in sig.data.ic_modules.modules:
+			if module is GlitchModule:
+				var id: int = sig.get_instance_id()
+				live[id] = true
+				if not _glitches.has(id) or _glitches[id].module != module:
+					var cycle: float = maxf(0.1, float(module.jump_interval_sec)) * clampi(int(module.position_count), 2, 12)
+					_glitches[id] = {"sig": sig, "module": module, "age": randf() * cycle}
+				else:
+					_glitches[id].age += delta
+				break
+	for id in _glitches.keys():
+		if not live.has(id):
+			_glitches.erase(id)
+
+func glitch_state(sig: ActiveSignal) -> Dictionary:
+	return _glitches.get(sig.get_instance_id(), {}) if sig != null else {}
+
+func has_glitch(sig: ActiveSignal) -> bool:
+	return not glitch_state(sig).is_empty()
+
 func glitch_phase(sig: ActiveSignal) -> int:
-	var state := _state(sig)
-	if not state.modules.has(&"glitch"):
+	var state := glitch_state(sig)
+	if state.is_empty():
 		return 0
-	var module: GlitchModule = state.modules[&"glitch"]
+	var module: GlitchModule = state.module
 	return int(state.age / maxf(0.1, module.jump_interval_sec)) % clampi(module.position_count, 2, 12)
 
 func glitch_offset(sig: ActiveSignal) -> Vector2:
 	var phase := glitch_phase(sig)
 	if phase == 0:
 		return Vector2.ZERO
-	var module: GlitchModule = _state(sig).modules[&"glitch"]
+	var module: GlitchModule = glitch_state(sig).module
 	var angle := TAU * float(phase - 1) / float(clampi(module.position_count, 2, 12) - 1)
 	return Vector2(cos(angle) * maxf(32.0, absf(module.max_offset_px.x)), sin(angle) * maxf(32.0, absf(module.max_offset_px.y)))
 
@@ -276,7 +310,7 @@ func _update_signal_visuals() -> void:
 	var manager = CommandDispatch.signal_manager
 	if manager == null:
 		return
-	if sessions.is_empty() and _applied_visuals.is_empty():
+	if sessions.is_empty() and _applied_visuals.is_empty() and _glitches.is_empty():
 		return
 	var blackout := is_blacked_out()
 	var seen := {}
@@ -286,7 +320,7 @@ func _update_signal_visuals() -> void:
 		var node_id: int = sig.instance_node.get_instance_id()
 		seen[node_id] = true
 		# Redact is included so the tooltip text re-renders when it starts/ends.
-		var wanted := [glitch_offset(sig), has_effect(sig, &"glitch"), glitch_phase(sig) != 0, blackout, has_effect(sig, &"redact")]
+		var wanted := [glitch_offset(sig), has_glitch(sig), glitch_phase(sig) != 0, blackout, has_effect(sig, &"redact")]
 		if wanted == _applied_visuals.get(node_id, _NO_VISUALS):
 			continue
 		sig.instance_node.apply_disruption_visuals(wanted[0], wanted[1], wanted[2], wanted[3])
@@ -372,8 +406,16 @@ func _tick_spammer(state: Dictionary, delta: float) -> void:
 		return
 	_spawn_popup(state, module)
 
+# Spam placement: try several random spots across the allowed region(s) and
+# keep the one that overlaps existing popups least, then sits farthest from
+# them, so spam spreads over the screen instead of stacking in a band.
+const SPAM_CANDIDATES := 12
+const SPAM_SIZE_JITTER := 0.2
+const SPAM_TILT_DEG := 3.0
+const SPAM_EDGE_PX := 14.0
+
 func _spawn_popup(state: Dictionary, module: SpammerModule) -> void:
-	var rect := _popup_region(module.placement)
+	var regions := _popup_regions(module.placement)
 	var popup := PanelContainer.new()
 	popup.name = "SpamPopup"
 	popup.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -415,9 +457,15 @@ func _spawn_popup(state: Dictionary, module: SpammerModule) -> void:
 	var footer := Label.new()
 	footer.text = "Disconnect host to unsubscribe."
 	rows.add_child(footer)
-	popup.custom_minimum_size = Vector2(minf(maxf(220, module.popup_size.x), rect.size.x), minf(maxf(120, module.popup_size.y), rect.size.y))
+	var jitter := 1.0 + randf_range(-SPAM_SIZE_JITTER, SPAM_SIZE_JITTER)
+	var wanted_size := Vector2(maxf(220, module.popup_size.x), maxf(120, module.popup_size.y)) * jitter
+	var placed := _place_popup(regions, wanted_size)
+	var rect: Rect2 = placed.region
+	popup.custom_minimum_size = Vector2(minf(wanted_size.x, rect.size.x), minf(wanted_size.y, rect.size.y))
 	popup.size = popup.custom_minimum_size
-	popup.position = rect.position + Vector2(randf() * maxf(0, rect.size.x - popup.size.x), randf() * maxf(0, rect.size.y - popup.size.y))
+	popup.position = placed.position
+	popup.pivot_offset = popup.size * 0.5
+	popup.rotation_degrees = randf_range(-SPAM_TILT_DEG, SPAM_TILT_DEG)
 	state.popups.append(popup)
 	effect_event.emit(state.sig, &"spammer", &"spawned", {"count": state.popups.size(), "placement": module.placement})
 	# Wrapped labels initially measure before their container has a width.
@@ -426,19 +474,66 @@ func _spawn_popup(state: Dictionary, module: SpammerModule) -> void:
 	await get_tree().process_frame
 	if is_instance_valid(popup) and not popup.is_queued_for_deletion():
 		popup.size = popup.custom_minimum_size
-		popup.position.x = clampf(popup.position.x, rect.position.x, maxf(rect.position.x, rect.end.x - popup.size.x))
-		popup.position.y = clampf(popup.position.y, rect.position.y, maxf(rect.position.y, rect.end.y - popup.size.y))
+		# The final size is known now: re-center the tilt and keep the tilted
+		# corners inside the full region (drop the tilt if there's no room).
+		popup.pivot_offset = popup.size * 0.5
+		var full: Rect2 = placed.full
+		var margin := _tilt_margin(popup.size, popup.rotation)
+		if full.size.x < popup.size.x + 2.0 * margin.x or full.size.y < popup.size.y + 2.0 * margin.y:
+			popup.rotation = 0.0
+			margin = Vector2.ZERO
+		var lo := full.position + margin
+		var hi := full.end - popup.size - margin
+		popup.position.x = clampf(popup.position.x, lo.x, maxf(lo.x, hi.x))
+		popup.position.y = clampf(popup.position.y, lo.y, maxf(lo.y, hi.y))
 		popup.modulate.a = 1.0
 
-func _popup_region(placement: int) -> Rect2:
-	if placement == SpammerModule.Placement.BOTH:
-		placement = randi_range(0, 1)
-	if placement == SpammerModule.Placement.TERMINAL:
-		return terminal.get_global_rect()
-	var timeline = CommandDispatch.timeline_manager
-	if timeline != null:
-		return Rect2(timeline.get_global_transform_with_canvas().origin, Vector2(timeline.screen_width, timeline.map_height_px))
-	return Rect2(Vector2.ZERO, Vector2(1000, 450))
+func _popup_regions(placement: int) -> Array[Rect2]:
+	var regions: Array[Rect2] = []
+	if placement == SpammerModule.Placement.TERMINAL or placement == SpammerModule.Placement.BOTH:
+		regions.append(terminal.get_global_rect())
+	if placement == SpammerModule.Placement.TIMELINE or placement == SpammerModule.Placement.BOTH:
+		var timeline = CommandDispatch.timeline_manager
+		if timeline != null:
+			regions.append(Rect2(timeline.get_global_transform_with_canvas().origin, Vector2(timeline.screen_width, timeline.map_height_px)))
+		else:
+			regions.append(Rect2(Vector2.ZERO, Vector2(1000, 450)))
+	return regions
+
+# Returns {"position", "region" (inset for the tilt), "full"} for a popup of `size`.
+func _place_popup(regions: Array[Rect2], size: Vector2) -> Dictionary:
+	var others: Array[Rect2] = []
+	for other_state in sessions.values():
+		for other in other_state.popups:
+			if is_instance_valid(other) and not other.is_queued_for_deletion():
+				others.append(other.get_global_rect())
+	var best := {}
+	var best_score := INF
+	for i in SPAM_CANDIDATES:
+		var full: Rect2 = regions[randi_range(0, regions.size() - 1)]
+		var region := full
+		# Leave room for the tilt (refit after layout makes it exact).
+		if region.size.x > size.x + 2.0 * SPAM_EDGE_PX and region.size.y > size.y + 2.0 * SPAM_EDGE_PX:
+			region = region.grow(-SPAM_EDGE_PX)
+		var fit := Vector2(minf(size.x, region.size.x), minf(size.y, region.size.y))
+		var position := region.position + Vector2(randf() * maxf(0.0, region.size.x - fit.x), randf() * maxf(0.0, region.size.y - fit.y))
+		var rect := Rect2(position, fit)
+		var overlap := 0.0
+		var nearest := 600.0
+		for other in others:
+			overlap += rect.intersection(other).get_area()
+			nearest = minf(nearest, rect.get_center().distance_to(other.get_center()))
+		var score := overlap - 10.0 * nearest
+		if score < best_score:
+			best_score = score
+			best = {"position": position, "region": region, "full": full}
+	return best
+
+# How far a rect's corners stick out past it when rotated about its center.
+func _tilt_margin(size: Vector2, angle: float) -> Vector2:
+	var c := absf(cos(angle))
+	var t := absf(sin(angle))
+	return Vector2((size.x * c + size.y * t - size.x) * 0.5, (size.x * t + size.y * c - size.y) * 0.5).ceil()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:

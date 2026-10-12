@@ -168,6 +168,9 @@ func _test_degrade_and_redact() -> void:
 	var display := controller.security_text(sig, source)
 	check("Redact masks individual letters only", display == "[color=cyan]████████ ████ 123: $Ab9!?[/color]")
 	check("Redact mask is stable", display == controller.security_text(sig, source))
+	var plain := "abcdefghijklmnopqrstuvwxyz0123456789abcdefghij"
+	check("Degrade corrupts different positions from tick to tick", _changed_positions(plain, DisruptionText.transform(plain, 0.3, 7, false, 1)) != _changed_positions(plain, DisruptionText.transform(plain, 0.3, 7, false, 2)))
+	check("Redact positions don't depend on the tick", DisruptionText.transform(plain, 0.3, 7, true, 1) == DisruptionText.transform(plain, 0.3, 7, true, 2))
 	var noise := DegradeModule.new()
 	noise.ramp_sec = 0.1
 	noise.max_corruption = 1.0
@@ -210,7 +213,10 @@ func _test_blackout_and_glitch() -> void:
 	var original_position: Vector2 = sig.instance_node.position
 	var collision_position: Vector2 = sig.instance_node.detection_controller.global_position
 	var distance: float = manager.get_horizontal_runner_distance_cells(sig)
-	controller.sessions[sig.get_instance_id()].age = 0.6
+	# Glitch is passive: the controller tracks it without a session.
+	controller._update_glitches(0.0)
+	check("Glitch is tracked while the signal is live", controller.has_glitch(sig))
+	controller.glitch_state(sig).age = 0.6
 	controller._update_signal_visuals()
 	check("Glitch moves visual and pointer only", sig.instance_node.shape.position != Vector2.ZERO and sig.instance_node.signal_icon.position == sig.instance_node.shape.position)
 	check("Glitch leaves position, range and runner collision unchanged", sig.instance_node.position == original_position and sig.instance_node.detection_controller.global_position == collision_position and is_equal_approx(manager.get_horizontal_runner_distance_cells(sig), distance))
@@ -224,10 +230,27 @@ func _test_blackout_and_glitch() -> void:
 		if child is GlitchRipple:
 			ripples += 1
 	check("fake click gives ripple without dispatching commands", ripples > 0 and submitted.size() == before)
-	controller.sessions[sig.get_instance_id()].age = 1.6
+	controller.glitch_state(sig).age = 1.6
 	controller._update_signal_visuals()
-	check("Glitch returns to real position and solid pip phase", controller.glitch_phase(sig) == 0 and sig.instance_node.shape.position == Vector2.ZERO)
+	check("Glitch returns to real position", controller.glitch_phase(sig) == 0 and sig.instance_node.shape.position == Vector2.ZERO)
 	close(sig)
+	# Passive: a glitching signal nobody has connected to still jumps, and its
+	# decoy positions shimmer (mirage overlay) while the real one doesn't.
+	var passive_glitch := GlitchModule.new()
+	passive_glitch.position_count = 3
+	passive_glitch.jump_interval_sec = 0.5
+	var idle := host([passive_glitch])
+	controller._update_glitches(0.0)
+	controller.glitch_state(idle).age = 0.6
+	controller._update_signal_visuals()
+	check("unconnected Glitch still jumps to a decoy", idle.terminal_session == null and idle.instance_node.shape.position != Vector2.ZERO)
+	check("decoy position gets the mirage overlay, no pip", idle.instance_node._mirage_nodes.size() == 2 and idle.instance_node.shape.modulate.a < 1.0)
+	controller.glitch_state(idle).age = 1.6
+	controller._update_signal_visuals()
+	check("real position has no mirage", idle.instance_node._mirage_nodes.is_empty() and is_equal_approx(idle.instance_node.shape.modulate.a, 1.0))
+	idle.disable_signal()
+	controller._update_glitches(0.0)
+	check("disabled signal stops glitching", not controller.has_glitch(idle))
 
 func _test_spammer() -> void:
 	var spammer := SpammerModule.new()
@@ -338,3 +361,10 @@ func _test_lab() -> void:
 		get_viewport().get_texture().get_image().save_png("/tmp/disruptive-lab-effects.png")
 	lab.queue_free()
 	await get_tree().process_frame
+
+func _changed_positions(source: String, shown: String) -> Array:
+	var result: Array = []
+	for i in mini(source.length(), shown.length()):
+		if source[i] != shown[i]:
+			result.append(i)
+	return result

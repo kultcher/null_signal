@@ -28,6 +28,11 @@ var _shape_sweep_material: ShaderMaterial = null
 var _disruption_offset := Vector2.ZERO
 var _disruption_fake := false
 var _disruption_glitch := false
+# Glitch decoy look: a BackBufferCopy + screen-reading overlay over the icon
+# while it sits at a fake position (see Shaders/glitch_mirage.gdshader).
+const MIRAGE_SHADER := preload("res://Shaders/glitch_mirage.gdshader")
+const MIRAGE_DECOY_ALPHA := 0.8
+var _mirage_nodes: Array[Node] = []
 var _tooltip_body_source := ""
 
 # Display blocks: independent systems hide parts of a signal for their own
@@ -289,22 +294,50 @@ func apply_disruption_visuals(offset: Vector2, glitch: bool, fake: bool, blackou
 	_disruption_offset = offset
 	if detection_controller.detection_poly != null:
 		detection_controller.detection_poly.position = offset.rotated(-detection_controller.rotation)
-	if _disruption_glitch != glitch or _disruption_fake != fake or not difference.is_zero_approx():
+	if _disruption_glitch != glitch or _disruption_fake != fake:
 		_disruption_glitch = glitch
 		_disruption_fake = fake
-		queue_redraw()
+		_set_mirage(fake)
 	set_display_block(&"blackout", BLOCK_VISIBLE | BLOCK_PICK if blackout else 0)
 	set_display_block(&"glitch_decoy", BLOCK_TOOLTIP if fake else 0)
 	_refresh_disrupted_tooltip()
 
-func _draw() -> void:
-	if not _disruption_glitch:
+# Decoy positions shimmer; the real position looks normal. The overlay moves
+# with the other visual children (apply_disruption_visuals shifts them).
+func _set_mirage(on: bool) -> void:
+	shape.modulate.a = MIRAGE_DECOY_ALPHA if on else 1.0
+	if not on:
+		for node in _mirage_nodes:
+			if is_instance_valid(node):
+				node.queue_free()
+		_mirage_nodes.clear()
 		return
-	var pip := _disruption_offset + Vector2(0, -35)
-	if _disruption_fake:
-		draw_arc(pip, 4.0, 0, TAU, 20, Color(0.45, 0.65, 0.7), 1.0, true)
-	else:
-		draw_circle(pip, 4.0, Color(0.2, 1.0, 1.0))
+	if not _mirage_nodes.is_empty():
+		return
+	var bounds := _icon_bounds().grow(14.0)
+	var copy := BackBufferCopy.new()
+	# Whole-viewport copy: a rect copy missed the icon under the timeline's
+	# canvas transform. Only decoy frames pay for it.
+	copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	add_child(copy)
+	var overlay := ColorRect.new()
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.position = shape.position + bounds.position
+	overlay.size = bounds.size
+	var material := ShaderMaterial.new()
+	material.shader = MIRAGE_SHADER
+	overlay.material = material
+	add_child(overlay)
+	_mirage_nodes = [copy, overlay]
+
+func _icon_bounds() -> Rect2:
+	var points: PackedVector2Array = shape.polygon
+	if points.is_empty():
+		return Rect2(-24, -24, 48, 48)
+	var bounds := Rect2(points[0], Vector2.ZERO)
+	for point in points:
+		bounds = bounds.expand(point)
+	return bounds
 
 func get_display_position() -> Vector2:
 	return position + _disruption_offset

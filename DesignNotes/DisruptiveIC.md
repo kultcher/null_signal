@@ -42,17 +42,17 @@ resources can also be put directly into an `ICComponent`.
 | IC | Custom parameters | Behavior |
 | --- | --- | --- |
 | Lag | `delay_sec` | Every keyboard event, including edits, shortcuts and Enter, is buffered for this host. Native Godot editing runs in an isolated input viewport; only its output is mirrored to the displayed command line. Multiple commands retain their order. Pending input continues on background tabs, waits for connection readiness, and is discarded on disconnect. |
-| Spammer | `placement` (0 timeline, 1 terminal, 2 both), `spawn_interval_sec`, `max_popups`, `popup_size` | Closable popups obstruct clicks without taking keyboard focus. The count limit is per host; closing a popup permits a replacement at the next spawn interval. Disconnect removes that host's popups. |
-| Degrade | `ramp_sec`, `max_corruption`, `noise_interval_sec` | Noise ramps from zero to the configured fraction. Both history and input have a separate display representation. Commands, clipboard text, BBCode and stored history remain intact. Reconnect resets the ramp. |
+| Spammer | `placement` (0 timeline, 1 terminal, 2 both), `spawn_interval_sec`, `max_popups`, `popup_size` | Closable popups obstruct clicks without taking keyboard focus. Each popup picks the best of 12 random spots (least overlap with existing popups, farthest from them), with size jitter and a slight tilt, inside the terminal and/or timeline. The count limit is per host; closing a popup permits a replacement at the next spawn interval. Disconnect removes that host's popups. |
+| Degrade | `ramp_sec`, `max_corruption`, `noise_interval_sec` | Noise ramps from zero to the configured fraction; the corrupted positions reshuffle every noise step. Both history and input have a separate display representation. Commands, clipboard text, BBCode and stored history remain intact. Reconnect resets the ramp. |
 | Blackout | none | Hides all signal pictures, tooltips and session lines while any Blackout host is connected. Runner, corridor, terminal and physical detection keep working. Known IDs still work in terminal commands. Closing one host does not clear another host's Blackout. |
-| Glitch | `position_count` (includes the real position), `jump_interval_sec`, `max_offset_px` | Cycles the host's visual image and pointer target. A solid cyan pip marks the real phase; fake phases have a hollow pip. Fake clicks ripple without connecting, scanning or pinning a tooltip. The real entity, interaction distance and detection collision shapes never move. It starts on connection and restores the true picture on disconnect. |
+| Glitch | `position_count` (includes the real position), `jump_interval_sec`, `max_offset_px` | Passive: always cycles the host's visual image and pointer target, connected or not, from a random per-signal phase; disabling the host stops it. Decoy positions shimmer with a heat-haze shader (`Shaders/glitch_mirage.gdshader`) and are slightly faded; the real position looks normal. Fake clicks ripple without connecting, scanning or pinning a tooltip. The real entity, interaction distance and detection collision shapes never move. |
 | Redact | `letter_fraction` | A stable mask replaces individual letters in the host's security descriptions, detail tooltip, terminal detail panels and output prompts. Digits, punctuation and BBCode remain intact. User command echoes are not censored. The actual `$Callback` return token is explicitly protected, including special characters. |
 
 Redact and Degrade compose without hiding the actual Callback challenge:
 the output return token stays readable under both effects. Degrade can still
 obscure the player’s input display, without changing the submitted value.
-Redact does not censor user input. New Glitch sessions begin at their real
-position and then cycle; switching tabs does not restart them.
+Redact does not censor user input. Glitch runs on its own clock, so
+connecting, switching tabs or disconnecting doesn't reset it.
 
 ## Shared UI and recorder integration
 
