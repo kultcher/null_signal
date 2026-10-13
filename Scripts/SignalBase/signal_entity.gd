@@ -302,8 +302,8 @@ func apply_disruption_visuals(offset: Vector2, glitch: bool, fake: bool, blackou
 	set_display_block(&"glitch_decoy", BLOCK_TOOLTIP if fake else 0)
 	_refresh_disrupted_tooltip()
 
-# Decoy positions shimmer; the real position looks normal. The overlay moves
-# with the other visual children (apply_disruption_visuals shifts them).
+# Decoy positions shimmer; the real position looks normal. The overlay lives
+# under the shape, so it moves and hides with it.
 func _set_mirage(on: bool) -> void:
 	shape.modulate.a = MIRAGE_DECOY_ALPHA if on else 1.0
 	if not on:
@@ -319,15 +319,17 @@ func _set_mirage(on: bool) -> void:
 	# Whole-viewport copy: a rect copy missed the icon under the timeline's
 	# canvas transform. Only decoy frames pay for it.
 	copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
-	add_child(copy)
+	# Children of the shape: they follow its visibility (hidden guards) and
+	# position (glitch offset), and draw right after it.
+	shape.add_child(copy)
 	var overlay := ColorRect.new()
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	overlay.position = shape.position + bounds.position
+	overlay.position = bounds.position
 	overlay.size = bounds.size
 	var material := ShaderMaterial.new()
 	material.shader = MIRAGE_SHADER
 	overlay.material = material
-	add_child(overlay)
+	shape.add_child(overlay)
 	_mirage_nodes = [copy, overlay]
 
 func _icon_bounds() -> Rect2:

@@ -251,8 +251,31 @@ func _test_blackout_and_glitch() -> void:
 	idle.disable_signal()
 	controller._update_glitches(0.0)
 	check("disabled signal stops glitching", not controller.has_glitch(idle))
+	# An unrevealed guard in a decoy phase must not leak its spot via the mirage.
+	var guard_glitch := GlitchModule.new()
+	guard_glitch.position_count = 3
+	guard_glitch.jump_interval_sec = 0.5
+	var guard_data := RunDefinition.BASIC_GUARD.duplicate(true) as SignalData
+	guard_data.system_id = "glitch_guard"
+	guard_data.ic_modules = RunDefinition.new().make_ic([guard_glitch])
+	guard_data.set_meta("auto_codex_popups", false)
+	manager.spawn_signal_data(guard_data, 2.5)
+	manager.update_signal_position()
+	var guard: ActiveSignal = manager.signal_queue[-1]
+	guard.instance_node.set_guard_revealed(false)
+	controller._update_glitches(0.0)
+	controller.glitch_state(guard).age = 0.6
+	controller._update_signal_visuals()
+	var guard_nodes: Array = guard.instance_node._mirage_nodes
+	check("hidden guard's mirage stays hidden", guard_nodes.size() == 2 and not (guard_nodes[1] as CanvasItem).is_visible_in_tree())
+	guard.instance_node.set_guard_revealed(true)
+	check("revealed guard shows its mirage", (guard_nodes[1] as CanvasItem).is_visible_in_tree())
+	guard.disable_signal()
 
 func _test_spammer() -> void:
+	# Placement: no overlap beats a far spot that overlaps; distance breaks ties.
+	check("spam placement prefers a clear spot over a far overlapping one", SessionDisruptionController._spot_better(0.0, 50.0, 400.0, 600.0) and not SessionDisruptionController._spot_better(400.0, 600.0, 0.0, 50.0))
+	check("spam placement breaks overlap ties by distance", SessionDisruptionController._spot_better(0.0, 300.0, 0.0, 100.0) and not SessionDisruptionController._spot_better(0.0, 100.0, 0.0, 300.0))
 	var spammer := SpammerModule.new()
 	spammer.spawn_interval_sec = 0.1
 	spammer.max_popups = 2

@@ -508,7 +508,8 @@ func _place_popup(regions: Array[Rect2], size: Vector2) -> Dictionary:
 			if is_instance_valid(other) and not other.is_queued_for_deletion():
 				others.append(other.get_global_rect())
 	var best := {}
-	var best_score := INF
+	var best_overlap := INF
+	var best_nearest := -1.0
 	for i in SPAM_CANDIDATES:
 		var full: Rect2 = regions[randi_range(0, regions.size() - 1)]
 		var region := full
@@ -523,11 +524,17 @@ func _place_popup(regions: Array[Rect2], size: Vector2) -> Dictionary:
 		for other in others:
 			overlap += rect.intersection(other).get_area()
 			nearest = minf(nearest, rect.get_center().distance_to(other.get_center()))
-		var score := overlap - 10.0 * nearest
-		if score < best_score:
-			best_score = score
+		if _spot_better(overlap, nearest, best_overlap, best_nearest):
+			best_overlap = overlap
+			best_nearest = nearest
 			best = {"position": position, "region": region, "full": full}
 	return best
+
+# Least overlap wins; distance to the nearest popup only breaks ties.
+static func _spot_better(overlap: float, nearest: float, best_overlap: float, best_nearest: float) -> bool:
+	if overlap < best_overlap - 0.5:
+		return true
+	return absf(overlap - best_overlap) <= 0.5 and nearest > best_nearest
 
 # How far a rect's corners stick out past it when rotated about its center.
 func _tilt_margin(size: Vector2, angle: float) -> Vector2:
