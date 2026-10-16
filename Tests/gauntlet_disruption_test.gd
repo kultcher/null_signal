@@ -60,8 +60,9 @@ func _ready() -> void:
 			popup.get_child(0).get_child(0).get_child(1).pressed.emit()
 			check("popup dismissal is recorded", trial.disruption_counts.get("spammer.dismissed", 0) == 1)
 		elif key == "glitch":
-			var state: Dictionary = terminal.disruptions.sessions[sig.get_instance_id()]
-			state.age = sig.data.ic_modules.modules[0].jump_interval_sec + 0.05
+			# Glitch is passive: its phase comes from the per-signal tracker.
+			terminal.disruptions._update_glitches(0.0)
+			terminal.disruptions.glitch_state(sig).age = sig.data.ic_modules.modules[0].jump_interval_sec + 0.05
 			terminal.disruptions._update_signal_visuals()
 			var click := InputEventMouseButton.new()
 			click.button_index = MOUSE_BUTTON_LEFT

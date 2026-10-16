@@ -34,7 +34,15 @@ static func transform(source: String, fraction: float, seed_value: int, redact: 
 		var code := character.unicode_at(0)
 		var is_letter := (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
 		var eligible := is_letter if redact else not character in [" ", "\t", "\n", "\r"]
-		var sample := float(hash("%d:%d:%d" % [seed_value, cursor, source_hash]) & 0xffff) / 65536.0
+		# Redact masks fixed positions; Degrade re-picks which characters are
+		# corrupted every noise step, so the damage wanders across the text.
+		# (String hashes of near-identical keys differ only in their low bits,
+		# so Degrade's key goes through rand_from_seed to mix it properly.)
+		var sample: float
+		if redact:
+			sample = float(hash("%d:%d:%d" % [seed_value, cursor, source_hash]) & 0xffff) / 65536.0
+		else:
+			sample = float(rand_from_seed(hash("%d:%d:%d:%d" % [seed_value, cursor, source_hash, noise_step]))[0] & 0xffff) / 65536.0
 		if not protected and eligible and sample < clampf(fraction, 0.0, 1.0):
 			character = "█" if redact else NOISE[(hash("%d:%d:%d" % [seed_value, cursor, noise_step]) & 0x7fffffff) % NOISE.length()]
 		result += character

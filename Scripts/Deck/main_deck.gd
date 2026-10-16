@@ -188,8 +188,10 @@ func set_lamp_color(key: String, color: Color, text: String, progress := -1.0) -
 		l.light.energy = 0.25 if idle else 1.8
 	var text_col := Color(0.35, 0.6, 0.42) if idle else Color(color.r, color.g, color.b, 1.0).lerp(PHOSPHOR, 0.2)
 	l.label.add_theme_color_override("font_color", text_col)
-	l.label.text = text.to_upper()
-	_fit_label(l.label)
+	# Multiple entries (e.g. several IC) get a row each, shrunk to fit the lamp.
+	l.label.text = text.to_upper().replace(" | ", "\n")
+	l.label.clip_text = true
+	_fit_label(l.label, 22, 13 if l.label.get_line_count() <= 1 else 8)
 	l.progress = progress
 	_gauges.queue_redraw()
 
@@ -226,10 +228,21 @@ func _on_lamp_input(event: InputEvent, key: String) -> void:
 func _fit_label(lbl: Label, max_size := 22, min_size := 13, pad := 14.0) -> void:
 	var font := lbl.get_theme_font("font")
 	var avail := lbl.size.x - pad
+	var rows := lbl.text.split("\n")
+	var avail_h := lbl.size.y - 4.0
+	var spacing := lbl.get_theme_constant("line_spacing")
 	var fs := max_size
-	while fs > min_size and font.get_string_size(lbl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail:
+	while fs > min_size and not _label_fits(font, rows, fs, avail, avail_h, spacing):
 		fs -= 1
 	lbl.add_theme_font_size_override("font_size", fs)
+
+func _label_fits(font: Font, rows: PackedStringArray, fs: int, avail_w: float, avail_h: float, spacing: int) -> bool:
+	if rows.size() > 1 and rows.size() * (font.get_height(fs) + spacing) > avail_h:
+		return false
+	for row in rows:
+		if font.get_string_size(row, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail_w:
+			return false
+	return true
 
 
 ## Move an existing Control onto one of the deck's rects (e.g. the objective tracker onto screen2).
